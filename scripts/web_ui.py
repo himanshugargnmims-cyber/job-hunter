@@ -222,6 +222,49 @@ HTML_PAGE = """<!DOCTYPE html>
       white-space: pre-wrap;
       display: none;
     }
+    .tabs-header {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--card-border);
+      padding-bottom: 10px;
+    }
+    .tab-btn {
+      background: rgba(30, 41, 59, 0.6);
+      color: var(--text-muted);
+      border: 1px solid var(--card-border);
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    .tab-btn:hover { background: #334155; color: white; }
+    .tab-btn.active {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+    .sim-pane { display: none; }
+    .sim-pane.active { display: block; }
+    .slider-container { margin-bottom: 16px; }
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    .slider-value { color: #38bdf8; font-weight: 600; }
+    input[type="range"] {
+      width: 100%;
+      height: 6px;
+      background: #334155;
+      border-radius: 4px;
+      outline: none;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -251,6 +294,157 @@ HTML_PAGE = """<!DOCTYPE html>
           <div style="font-size: 0.8rem; color: #94a3b8; text-transform: uppercase;">SaaS Magic Number & NRR</div>
           <div style="font-size: 1.6rem; font-weight: 700; color: #fbbf24; margin-top: 4px;" id="kpi-magic">1.25x / 115%</div>
           <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 2px;">Hyper-Efficient Growth</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Interactive RevOps Simulator Suite -->
+    <div class="card" style="border-top: 3px solid #6366f1;">
+      <div class="card-title">⚡ Interactive GTM & RevOps Live Simulators</div>
+      <div class="card-subtitle">Manipulate real-time revenue levers, commission accelerator curves, and deal desk discount governance.</div>
+      
+      <div class="tabs-header">
+        <button type="button" class="tab-btn active" id="btn-tab-velocity" onclick="switchSimTab('tab-velocity')">🚀 Pipeline Velocity Engine</button>
+        <button type="button" class="tab-btn" id="btn-tab-comp" onclick="switchSimTab('tab-comp')">💰 Sales Comp & OTE Modeler</button>
+        <button type="button" class="tab-btn" id="btn-tab-dealdesk" onclick="switchSimTab('tab-dealdesk')">⚖️ Deal Desk Commercial Matrix</button>
+      </div>
+
+      <!-- Tab 1: Pipeline Velocity -->
+      <div id="tab-velocity" class="sim-pane active">
+        <div class="grid-2">
+          <div>
+            <div class="slider-container">
+              <div class="slider-header">
+                <span>Active Qualified Opportunities (N)</span>
+                <span class="slider-value" id="val-sim-n">95 deals</span>
+              </div>
+              <input type="range" id="slider-n" min="10" max="300" step="5" value="95" oninput="updateVelocitySim()">
+            </div>
+            <div class="slider-container">
+              <div class="slider-header">
+                <span>Win Rate % (W)</span>
+                <span class="slider-value" id="val-sim-w">26%</span>
+              </div>
+              <input type="range" id="slider-w" min="5" max="60" step="1" value="26" oninput="updateVelocitySim()">
+            </div>
+            <div class="slider-container">
+              <div class="slider-header">
+                <span>Average Deal Size / ACV (S)</span>
+                <span class="slider-value" id="val-sim-s">$88,000</span>
+              </div>
+              <input type="range" id="slider-s" min="10000" max="250000" step="2000" value="88000" oninput="updateVelocitySim()">
+            </div>
+            <div class="slider-container">
+              <div class="slider-header">
+                <span>Sales Cycle Days (L)</span>
+                <span class="slider-value" id="val-sim-l">64 days</span>
+              </div>
+              <input type="range" id="slider-l" min="20" max="180" step="2" value="64" oninput="updateVelocitySim()">
+            </div>
+          </div>
+          <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid #334155; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; justify-content: center;">
+            <div style="font-size: 0.8rem; color: #94a3b8; text-transform: uppercase;">Simulated Quarterly Pipeline Pacing</div>
+            <div style="font-size: 2.2rem; font-weight: 800; color: #38bdf8; margin: 6px 0;" id="sim-qtr-pace">$3.06M</div>
+            <div style="font-size: 0.9rem; color: #cbd5e1;" id="sim-daily-pace">Daily Velocity: $33,962 / day</div>
+            <div style="font-size: 0.9rem; color: #cbd5e1; margin-top: 4px;" id="sim-annual-pace">Annualized Revenue Run-Rate: $12.4M / yr</div>
+            <div style="margin-top: 14px; padding: 10px; background: rgba(59, 130, 246, 0.1); border-left: 3px solid #3b82f6; border-radius: 4px; font-size: 0.8rem; color: #93c5fd;" id="sim-insight">
+              💡 RevOps Lever: Shortening sales cycle by 10 days accelerates quarterly revenue to $3.63M (+18.5%).
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 2: Sales Compensation -->
+      <div id="tab-comp" class="sim-pane">
+        <div class="grid-2">
+          <div>
+            <div class="slider-container">
+              <div class="slider-header">
+                <span>Base Salary</span>
+                <span class="slider-value" id="val-sim-base">$120,000</span>
+              </div>
+              <input type="range" id="slider-base" min="60000" max="250000" step="5000" value="120000" oninput="updateCompSim()">
+            </div>
+            <div class="slider-container">
+              <div class="slider-header">
+                <span>Variable Target (OTE Split)</span>
+                <span class="slider-value" id="val-sim-var">$120,000</span>
+              </div>
+              <input type="range" id="slider-var" min="40000" max="250000" step="5000" value="120000" oninput="updateCompSim()">
+            </div>
+            <div class="slider-container">
+              <div class="slider-header">
+                <span>Annual ARR Quota</span>
+                <span class="slider-value" id="val-sim-quota">$1,000,000</span>
+              </div>
+              <input type="range" id="slider-quota" min="400000" max="3000000" step="50000" value="1000000" oninput="updateCompSim()">
+            </div>
+            <div class="slider-container">
+              <div class="slider-header">
+                <span>Quota Attainment %</span>
+                <span class="slider-value" id="val-sim-attain">115%</span>
+              </div>
+              <input type="range" id="slider-attain" min="20" max="180" step="1" value="115" oninput="updateCompSim()">
+            </div>
+          </div>
+          <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid #334155; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; justify-content: center;">
+            <div style="font-size: 0.8rem; color: #94a3b8; text-transform: uppercase;">Total Realized Annual Earnings</div>
+            <div style="font-size: 2.2rem; font-weight: 800; color: #34d399; margin: 6px 0;" id="sim-comp-total">$247,800</div>
+            <div style="font-size: 0.9rem; color: #cbd5e1;" id="sim-comp-breakdown">Base: $120,000 | Commission: $127,800</div>
+            <div style="font-size: 0.9rem; color: #cbd5e1; margin-top: 4px;" id="sim-comp-ote-pct">Realization: 103.3% of $240,000 OTE</div>
+            <div style="margin-top: 14px; padding: 10px; background: rgba(16, 185, 129, 0.1); border-left: 3px solid #10b981; border-radius: 4px; font-size: 0.8rem; color: #6ee7b7;" id="sim-comp-accelerator">
+              🎯 Active Accelerator: Tier 3 (1.5x payout rate applied to attainment above 100% quota).
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 3: Deal Desk -->
+      <div id="tab-dealdesk" class="sim-pane">
+        <div class="grid-2">
+          <div>
+            <div class="slider-container">
+              <div class="slider-header">
+                <span>Deal Annual List Price</span>
+                <span class="slider-value" id="val-sim-deal-price">$120,000</span>
+              </div>
+              <input type="range" id="slider-deal-price" min="20000" max="500000" step="5000" value="120000" oninput="updateDealDeskSim()">
+            </div>
+            <div class="slider-container">
+              <div class="slider-header">
+                <span>Proposed Discount %</span>
+                <span class="slider-value" id="val-sim-deal-disc">18%</span>
+              </div>
+              <input type="range" id="slider-deal-disc" min="0" max="45" step="1" value="18" oninput="updateDealDeskSim()">
+            </div>
+            <div class="grid-2">
+              <div class="form-group">
+                <label>Contract Term</label>
+                <select id="select-term" onchange="updateDealDeskSim()">
+                  <option value="1">1 Year</option>
+                  <option value="2" selected>2 Years</option>
+                  <option value="3">3 Years</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Payment Terms</label>
+                <select id="select-pay-terms" onchange="updateDealDeskSim()">
+                  <option value="Annual Upfront" selected>Annual Upfront</option>
+                  <option value="Multi-Year Upfront">Multi-Year Upfront (+5% cash)</option>
+                  <option value="Quarterly">Quarterly</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid #334155; border-radius: 8px; padding: 20px; display: flex; flex-direction: column; justify-content: center;">
+            <div style="font-size: 0.8rem; color: #94a3b8; text-transform: uppercase;">Deal Desk Governance Decision</div>
+            <div style="font-size: 1.8rem; font-weight: 800; color: #fbbf24; margin: 6px 0;" id="sim-dd-status">Level 1: Management Review</div>
+            <div style="font-size: 0.9rem; color: #cbd5e1;" id="sim-dd-acv">Net ACV: $98,400 | Total TCV: $196,800</div>
+            <div style="font-size: 0.9rem; color: #cbd5e1; margin-top: 4px;" id="sim-dd-approver">Required Signoff: Regional Sales VP</div>
+            <div style="margin-top: 14px; padding: 10px; background: rgba(245, 158, 11, 0.1); border-left: 3px solid #f59e0b; border-radius: 4px; font-size: 0.8rem; color: #fde68a;" id="sim-dd-memo">
+              ⚠️ Policy Trigger: Discount (18%) exceeds rep discretion threshold (10%). Requires Sales Director or VP approval.
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -463,6 +657,11 @@ HTML_PAGE = """<!DOCTYPE html>
       } catch (e) {
         console.error("RevOps metrics load error:", e);
       }
+
+      // Initialize RevOps simulator states
+      if (typeof updateVelocitySim === 'function') updateVelocitySim();
+      if (typeof updateCompSim === 'function') updateCompSim();
+      if (typeof updateDealDeskSim === 'function') updateDealDeskSim();
     });
 
     function populateForm(data) {
@@ -622,6 +821,121 @@ HTML_PAGE = """<!DOCTYPE html>
       b.style.display = 'block';
       b.className = isSuccess ? 'banner-success' : 'banner-error';
       b.innerText = msg;
+    }
+
+    function switchSimTab(tabId) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.sim-pane').forEach(p => p.classList.remove('active'));
+      const activeBtn = document.getElementById('btn-' + tabId);
+      if (activeBtn) activeBtn.classList.add('active');
+      const activePane = document.getElementById(tabId);
+      if (activePane) activePane.classList.add('active');
+    }
+
+    function updateVelocitySim() {
+      const n = parseFloat(document.getElementById('slider-n').value);
+      const w = parseFloat(document.getElementById('slider-w').value);
+      const s = parseFloat(document.getElementById('slider-s').value);
+      const l = parseFloat(document.getElementById('slider-l').value);
+
+      document.getElementById('val-sim-n').innerText = n + ' deals';
+      document.getElementById('val-sim-w').innerText = w + '%';
+      document.getElementById('val-sim-s').innerText = '$' + s.toLocaleString();
+      document.getElementById('val-sim-l').innerText = l + ' days';
+
+      const daily = (n * (w / 100.0) * s) / l;
+      const qtr = daily * 90.0;
+      const annual = daily * 365.0;
+
+      document.getElementById('sim-qtr-pace').innerText = '$' + (qtr / 1000000.0).toFixed(2) + 'M';
+      document.getElementById('sim-daily-pace').innerText = 'Daily Velocity: $' + Math.round(daily).toLocaleString() + ' / day';
+      document.getElementById('sim-annual-pace').innerText = 'Annualized Revenue Run-Rate: $' + (annual / 1000000.0).toFixed(2) + 'M / yr';
+
+      const optDays = Math.max(10, l - 10);
+      const optQtr = (n * (w / 100.0) * s / optDays) * 90.0;
+      const optGain = ((optQtr - qtr) / qtr) * 100.0;
+      document.getElementById('sim-insight').innerText = '💡 RevOps Lever: Shortening cycle time by 10 days accelerates quarterly revenue to $' + (optQtr / 1000000.0).toFixed(2) + 'M (+' + optGain.toFixed(1) + '%).';
+    }
+
+    function updateCompSim() {
+      const base = parseFloat(document.getElementById('slider-base').value);
+      const targetVar = parseFloat(document.getElementById('slider-var').value);
+      const quota = parseFloat(document.getElementById('slider-quota').value);
+      const attain = parseFloat(document.getElementById('slider-attain').value);
+
+      document.getElementById('val-sim-base').innerText = '$' + base.toLocaleString();
+      document.getElementById('val-sim-var').innerText = '$' + targetVar.toLocaleString();
+      document.getElementById('val-sim-quota').innerText = '$' + quota.toLocaleString();
+      document.getElementById('val-sim-attain').innerText = attain + '%';
+
+      const ote = base + targetVar;
+      const baseRate = targetVar / quota;
+      const booked = (attain / 100.0) * quota;
+
+      let comm = 0;
+      let activeTier = 'Tier 1 (<80%)';
+
+      if (attain <= 80) {
+        comm = booked * (baseRate * 0.8);
+        activeTier = 'Tier 1: Sub-Quota (<80% - 0.8x deceleration)';
+      } else if (attain <= 100) {
+        comm = (0.8 * quota * baseRate * 0.8) + ((booked - 0.8 * quota) * baseRate);
+        activeTier = 'Tier 2: At-Quota (80-100% - 1.0x standard rate)';
+      } else if (attain <= 125) {
+        comm = (0.8 * quota * baseRate * 0.8) + (0.2 * quota * baseRate) + ((booked - quota) * baseRate * 1.5);
+        activeTier = "Tier 3: President's Club (100-125% - 1.5x accelerator)";
+      } else {
+        comm = (0.8 * quota * baseRate * 0.8) + (0.2 * quota * baseRate) + (0.25 * quota * baseRate * 1.5) + ((booked - 1.25 * quota) * baseRate * 2.0);
+        activeTier = "Tier 4: Super-Star (>125% - 2.0x super-accelerator)";
+      }
+
+      const totalEarnings = base + comm;
+      const oteRealized = (totalEarnings / ote) * 100.0;
+
+      document.getElementById('sim-comp-total').innerText = '$' + Math.round(totalEarnings).toLocaleString();
+      document.getElementById('sim-comp-breakdown').innerText = 'Base: $' + Math.round(base).toLocaleString() + ' | Commission: $' + Math.round(comm).toLocaleString();
+      document.getElementById('sim-comp-ote-pct').innerText = 'Realization: ' + oteRealized.toFixed(1) + '% of $' + Math.round(ote).toLocaleString() + ' OTE (Quota:OTE ' + (quota/ote).toFixed(1) + 'x)';
+      document.getElementById('sim-comp-accelerator').innerText = '🎯 Active Plan Status: ' + activeTier;
+    }
+
+    function updateDealDeskSim() {
+      const price = parseFloat(document.getElementById('slider-deal-price').value);
+      const disc = parseFloat(document.getElementById('slider-deal-disc').value);
+      const term = parseInt(document.getElementById('select-term').value) || 1;
+      const pay = document.getElementById('select-pay-terms').value;
+
+      document.getElementById('val-sim-deal-price').innerText = '$' + price.toLocaleString();
+      document.getElementById('val-sim-deal-disc').innerText = disc + '%';
+
+      const netAcv = price * (1.0 - (disc / 100.0));
+      const tcv = netAcv * term;
+
+      let status = 'Level 0: Auto-Approved';
+      let approver = 'Account Executive Discretion';
+      let note = '✅ Deal is within standard commercial boundaries. Zero escalation needed.';
+
+      if (disc > 30.0) {
+        status = 'Level 3: Executive Escalation';
+        approver = 'CRO + CFO Board Signoff Required';
+        note = '🚨 Severe Margin Dilution: Discount (' + disc + '%) exceeds 30%. Requires formal CFO exception memo.';
+      } else if (disc > 20.0) {
+        status = 'Level 2: RevOps Approval';
+        approver = 'VP of Sales + Head of RevOps';
+        note = '⚠️ High Discount (' + disc + '%): Requires cross-functional RevOps & Sales VP signoff.';
+      } else if (disc > 10.0) {
+        status = 'Level 1: Management Review';
+        approver = 'Regional Sales VP / Director';
+        note = '⚠️ Discretionary Discount (' + disc + '%): Requires 1st line sales leadership approval.';
+      }
+
+      if (pay === 'Quarterly' && disc > 10.0) {
+        note += ' (Note: Non-annual cash terms increase working capital drag).';
+      }
+
+      document.getElementById('sim-dd-status').innerText = status;
+      document.getElementById('sim-dd-acv').innerText = 'Net ACV: $' + Math.round(netAcv).toLocaleString() + ' | Total TCV: $' + Math.round(tcv).toLocaleString();
+      document.getElementById('sim-dd-approver').innerText = 'Designated Approver: ' + approver;
+      document.getElementById('sim-dd-memo').innerText = note;
     }
   </script>
 </body>

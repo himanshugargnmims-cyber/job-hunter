@@ -2,11 +2,13 @@
 Unit tests for the RevOps & Strategic Intelligence Toolkit.
 """
 
-import pytest
 from revops_kit.forecasting_engine import RevenueForecaster
 from revops_kit.pipeline_velocity import PipelineVelocityCalculator
 from revops_kit.lead_icp_scorer import ICPScoringEngine
 from revops_kit.executive_kpi_dashboard import ExecutiveDashboardGenerator
+from revops_kit.compensation_modeler import CompensationModeler
+from revops_kit.deal_desk_copilot import DealDeskCopilot
+from revops_kit.funnel_analyzer import FunnelAnalyzer
 
 
 def test_revenue_forecaster():
@@ -69,3 +71,71 @@ def test_executive_kpis():
     assert kpis["arr_growth_rate_pct"] == 20.0
     assert kpis["net_retention_rate_pct"] == 120.0
     assert kpis["gross_retention_rate_pct"] == 95.0
+
+
+def test_compensation_modeler():
+    comp = CompensationModeler(base_salary=100000.0, variable_target=100000.0, annual_quota=1000000.0)
+    payout = comp.calculate_commission_payout(1000000.0)
+    assert payout["attainment_pct"] == 100.0
+    assert payout["base_salary"] == 100000.0
+    assert payout["total_commission"] > 0.0
+
+    curve = comp.generate_payout_curve(step_pct=50.0, max_attainment_pct=150.0)
+    assert len(curve) >= 3
+
+
+def test_equity_package_evaluation():
+    eq = CompensationModeler.evaluate_equity_package(
+        num_options_or_shares=10000,
+        strike_price=2.0,
+        current_409a_valuation_per_share=10.0,
+        target_exit_multiple=3.0,
+        vesting_years=4
+    )
+    assert eq["current_net_paper_value"] == 80000.0  # (10 - 2) * 10000
+    assert eq["net_exit_liquidity"] > eq["current_net_paper_value"]
+    assert eq["annualized_equity_value"] > 0
+
+
+def test_deal_desk_copilot():
+    dd = DealDeskCopilot(target_gross_margin_pct=80.0)
+    deal = dd.evaluate_deal(
+        list_price_annual=100000.0,
+        discount_pct=15.0,
+        contract_years=3,
+        payment_terms="Annual Upfront"
+    )
+    assert deal["net_acv"] == 85000.0
+    assert deal["tcv"] == 255000.0
+    assert "Level 1" in deal["approval_level"]
+
+    battlecard = dd.get_competitor_battlecard("legacy_enterprise")
+    assert "name" in battlecard
+    assert len(battlecard["trap_questions"]) > 0
+
+
+def test_career_counter_offer():
+    res = DealDeskCopilot.generate_career_counter_offer(
+        offered_base=120000.0,
+        offered_variable=40000.0,
+        market_target_base=140000.0,
+        market_target_ote=200000.0,
+        equity_shares=5000
+    )
+    assert res["recommended_counter_base"] > 120000.0
+    assert "Dear" in res["email_template"]
+
+
+def test_funnel_analyzer():
+    funnel = FunnelAnalyzer()
+    res = funnel.analyze_funnel()
+    assert res["top_of_funnel"] == 10000
+    assert res["bottom_of_funnel"] == 48
+    assert res["overall_conversion_pct"] > 0
+    assert len(res["stage_metrics"]) == 7
+
+
+def test_career_funnel():
+    res = FunnelAnalyzer.get_career_funnel(applications_submitted=100)
+    assert res["top_of_funnel"] == 100
+    assert res["bottom_of_funnel"] >= 1

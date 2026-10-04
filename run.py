@@ -41,7 +41,11 @@ Examples:
     mode_group = parser.add_mutually_exclusive_group()
     mode_group.add_argument("--setup", action="store_true", help="Run interactive profile onboarding wizard")
     mode_group.add_argument("--ui", action="store_true", help="Start local Web UI dashboard at http://localhost:8080")
-    mode_group.add_argument("--revops", action="store_true", help="Run RevOps & GTM Strategy intelligence simulation suite")
+    mode_group.add_argument("--revops", action="store_true", help="Run complete RevOps & GTM Strategy intelligence simulation suite")
+    mode_group.add_argument("--comp", action="store_true", help="Run Sales Compensation & OTE Plan Modeler with accelerator tiers")
+    mode_group.add_argument("--dealdesk", action="store_true", help="Run Deal Desk Commercial Governance & Battlecard simulator")
+    mode_group.add_argument("--funnel", action="store_true", help="Run GTM Full-Funnel Cohort & Leaky Bucket conversion diagnostics")
+    mode_group.add_argument("--awesome", action="store_true", help="Display Awesome-RevOps definitive playbook and benchmarks")
     mode_group.add_argument("--scrape", action="store_true", help="Scrape live job listings from ATS platforms")
     mode_group.add_argument("--match", action="store_true", help="Evaluate resume fit against discovered jobs")
     mode_group.add_argument("--apply", action="store_true", help="Submit applications for high-matching jobs")
@@ -65,10 +69,13 @@ Examples:
         from revops_kit.pipeline_velocity import PipelineVelocityCalculator
         from revops_kit.lead_icp_scorer import ICPScoringEngine
         from revops_kit.executive_kpi_dashboard import ExecutiveDashboardGenerator
+        from revops_kit.compensation_modeler import CompensationModeler
+        from revops_kit.deal_desk_copilot import DealDeskCopilot
+        from revops_kit.funnel_analyzer import FunnelAnalyzer
 
-        print("\n" + "#" * 72)
-        print("   NEXUS REVOPS & GTM STRATEGY INTELLIGENCE SIMULATION SUITE")
-        print("#" * 72)
+        print("\n" + "#" * 76)
+        print("   NEXUS REVOPS & GTM STRATEGY INTELLIGENCE COMPLETE SUITE")
+        print("#" * 76)
 
         # 1. Forecasting & MAPE
         forecaster = RevenueForecaster(target_quarterly_quota=4000000.0)
@@ -99,6 +106,47 @@ Examples:
         # 4. SaaS KPI Scorecard
         dash = ExecutiveDashboardGenerator()
         dash.print_board_dashboard()
+
+        # 5. Compensation Modeler
+        comp = CompensationModeler(base_salary=125000.0, variable_target=125000.0, annual_quota=1100000.0)
+        comp.print_compensation_report(sample_attainment_pct=118.0)
+
+        # 6. Deal Desk Copilot
+        dd = DealDeskCopilot(target_gross_margin_pct=82.0)
+        eval_res = dd.evaluate_deal(list_price_annual=150000.0, discount_pct=22.5, contract_years=2, payment_terms="Quarterly")
+        dd.print_deal_summary(eval_res)
+
+        # 7. Full-Funnel Cohort Diagnostics
+        funnel = FunnelAnalyzer()
+        funnel.print_funnel_report()
+        return
+
+    # 0B. INDIVIDUAL REVOPS TOOLS
+    if args.comp:
+        from revops_kit.compensation_modeler import CompensationModeler
+        comp = CompensationModeler()
+        comp.print_compensation_report(sample_attainment_pct=120.0)
+        return
+
+    if args.dealdesk:
+        from revops_kit.deal_desk_copilot import DealDeskCopilot
+        dd = DealDeskCopilot()
+        eval_res = dd.evaluate_deal(list_price_annual=120000.0, discount_pct=18.0, contract_years=2, payment_terms="Annual Upfront")
+        dd.print_deal_summary(eval_res)
+        return
+
+    if args.funnel:
+        from revops_kit.funnel_analyzer import FunnelAnalyzer
+        funnel = FunnelAnalyzer()
+        funnel.print_funnel_report()
+        return
+
+    if args.awesome:
+        awesome_path = BASE_DIR / "docs" / "AWESOME_REVOPS.md"
+        if awesome_path.exists():
+            print(awesome_path.read_text(encoding="utf-8"))
+        else:
+            print("Awesome-RevOps playbook located at docs/AWESOME_REVOPS.md")
         return
 
     # 1. SETUP WIZARD

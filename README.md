@@ -13,9 +13,14 @@
 **An Enterprise-Grade Revenue Operations (RevOps) Engine & Autonomous Opportunity Acquisition Platform.**  
 *Applying the algorithmic precision, forecasting rigor, and pipeline velocity models of high-growth B2B SaaS to strategic career capital and enterprise job intelligence.*
 
-[Explore Architecture](#-system-architecture) • [Quick Start](#-quick-start) • [RevOps Suite](#-revops--gtm-strategy-suite) • [Recruiter Walkthrough](#-for-hiring-managers--recruiters) • [Roadmap](#-community-roadmap--100k-stars-vision)
+[Explore Architecture](#-system-architecture) • [Quick Start](#-quick-start) • [RevOps Suite](#-revops--gtm-strategy-suite) • [Awesome-RevOps Guide](docs/AWESOME_REVOPS.md) • [100K Star Playbook](docs/STAR_ROADMAP_100K.md) • [Recruiter Walkthrough](#-for-hiring-managers--recruiters)
 
 </div>
+
+---
+
+## 🌟 Awesome-RevOps Master Reference Included!
+Looking for industry benchmarks, SaaS metrics formulas, and deal desk governance frameworks? Check out our curated **[`docs/AWESOME_REVOPS.md`](docs/AWESOME_REVOPS.md)** — the definitive handbook for revenue operators, sales leaders, and GTM engineers.
 
 ---
 
@@ -82,6 +87,9 @@ When evaluating candidates for **Revenue Operations (RevOps)**, **Go-To-Market (
 | :--- | :--- |
 | **Pipeline Forecasting & Variance Reduction** | [`revops_kit/forecasting_engine.py`](revops_kit/forecasting_engine.py) implements weighted probability modeling, AOP pacing, and Mean Absolute Percentage Error (**MAPE**) reduction (<12% error threshold). |
 | **GTM Velocity & Conversion Sensitivity** | [`revops_kit/pipeline_velocity.py`](revops_kit/pipeline_velocity.py) models sales cycle compression, win-rate sensitivity, and compound ARR acceleration. |
+| **Sales Compensation & OTE Plan Modeler** | [`revops_kit/compensation_modeler.py`](revops_kit/compensation_modeler.py) models 4.5x-6x quota:OTE capacity ratios, tiered marginal accelerators (1.5x, 2.0x), and equity (RSU/ISO) vesting liquidity. |
+| **Deal Desk Commercial Governance** | [`revops_kit/deal_desk_copilot.py`](revops_kit/deal_desk_copilot.py) evaluates commercial discount approval tiers (Rep -> VP -> RevOps -> CRO/CFO), margin erosion, and competitor battlecard objections. |
+| **Full-Funnel Cohort & Leaky Bucket Diagnostics** | [`revops_kit/funnel_analyzer.py`](revops_kit/funnel_analyzer.py) benchmarks stage-to-stage yield across 7 lifecycle stages against top-decile SaaS benchmarks with prescriptive RevOps remedies. |
 | **Account Tiering & ICP Scoring** | [`revops_kit/lead_icp_scorer.py`](revops_kit/lead_icp_scorer.py) implements a 4-pillar scoring algorithm (firmographic, technographic, intent, and strategic fit) that directly powers the resume-to-JD matching engine. |
 | **Board-Level Financial Telemetry** | [`revops_kit/executive_kpi_dashboard.py`](revops_kit/executive_kpi_dashboard.py) computes canonical SaaS metrics: **ARR, NRR, GRR, CAC Payback, SaaS Magic Number, and Rule of 40**. |
 | **Complex Systems Automation** | [`scripts/hard_check_applier.py`](scripts/hard_check_applier.py) demonstrates enterprise-grade browser orchestration, automated email OTP parsing via IMAP, and bulletproof DOM state verification. |
@@ -155,11 +163,23 @@ Nexus provides a unified CLI orchestrator:
 # Interactive setup wizard
 python run.py --setup
 
-# Launch modern Web UI dashboard
+# Launch modern Web UI dashboard with live simulators (http://localhost:8080)
 python run.py --ui
 
-# Run RevOps forecasting & pipeline velocity suite
+# Run full RevOps forecasting, velocity, comp & deal desk simulation suite
 python run.py --revops
+
+# Run Sales Compensation & OTE Plan Modeler with accelerator tiers
+python run.py --comp
+
+# Run Commercial Deal Desk Governance & Battlecard simulator
+python run.py --dealdesk
+
+# Run Full-Funnel Cohort & Leaky Bucket conversion diagnostics
+python run.py --funnel
+
+# Display Awesome-RevOps definitive playbook and metrics index
+python run.py --awesome
 
 # Ingest live postings matching target filters
 python run.py --scrape
