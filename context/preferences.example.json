@@ -1,0 +1,44 @@
+{
+  "target_roles": [
+    "Chief of Staff",
+    "Founder's Office",
+    "Strategy & Operations",
+    "Business Operations",
+    "Program Manager",
+    "Technical Program Manager",
+    "GTM Strategy",
+    "Revenue Operations",
+    "Customer Success Manager",
+    "Operations Lead"
+  ],
+  "target_locations": [
+    "Remote",
+    "Global Remote",
+    "San Francisco",
+    "New York",
+    "London",
+    "Bengaluru",
+    "Bangalore",
+    "Hyderabad",
+    "Gurugram",
+    "Gurgaon"
+  ],
+  "experience_years_min": 3,
+  "experience_years_max": 10,
+  "minimum_match_score": 70,
+  "min_salary_floor_lpa": 30.0,
+  "min_salary_floor_usd": 60000.0,
+  "min_salary_floor_eur": 55000.0,
+  "excluded_keywords": [
+    "Software Engineer",
+    "DevOps",
+    "QA Tester",
+    "Intern",
+    "Account Executive",
+    "Sales Representative",
+    "SDR",
+    "BDR",
+    "Talent Acquisition",
+    "Content Writer"
+  ]
+}

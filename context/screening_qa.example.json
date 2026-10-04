@@ -1,0 +1,28 @@
+{
+  "full_name": "Alex Taylor",
+  "first_name": "Alex",
+  "last_name": "Taylor",
+  "email": "alex.taylor@example.com",
+  "phone": "+1 555-0199",
+  "location": "San Francisco, CA, USA",
+  "willing_to_relocate": "Yes (Open to Remote, New York, London)",
+  "work_authorization_india": "Yes / Citizen",
+  "work_authorization_us": "Authorized to work in the US",
+  "requires_sponsorship": "No",
+  "current_notice_period": "30 Days",
+  "linkedin_url": "https://www.linkedin.com/in/alex-taylor-sample",
+  "github_portfolio_url": "https://github.com/alex-taylor-sample",
+  "portfolio_url": "https://alextaylor.dev",
+  "screening_answers": {
+    "notice_period": "30 Days (Negotiable based on start date)",
+    "work_authorization": "Fully authorized to work without current or future employer sponsorship.",
+    "relocation": "Yes, fully willing to relocate for the right opportunity or work hybrid/remote.",
+    "current_company": "Acme Technologies",
+    "current_title": "Senior Operations & Strategy Lead",
+    "total_years_experience": 6,
+    "current_ctc": "4000000",
+    "expected_ctc": "5500000",
+    "compensation": "Expected: $140,000 - $160,000 USD / ₹50-60 LPA (Flexible based on role charter and equity).",
+    "summary": "Accomplished operations and strategy professional with 6+ years of experience leading cross-functional execution, business systems, and strategic delivery in high-growth environments."
+  }
+}

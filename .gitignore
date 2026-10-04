@@ -1,0 +1,79 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+
+# Environment variables & secrets
+.env
+credentials.json
+*.pem
+*.key
+
+# Application runtime data & private trackers
+data/*.db
+data/*.csv
+data/*.xlsx
+data/*.json
+data/seen_otp_codes.txt
+!data/.gitkeep
+
+# Screenshots & execution logs
+logs/*
+!logs/.gitkeep
+
+# Browser authentication sessions and cookies
+sessions/*
+!sessions/.gitkeep
+
+# Candidate personal resumes (sample_resume.txt is preserved)
+resumes/*.pdf
+resumes/*.docx
+resumes/*.doc
+!resumes/sample_resume.txt
+!resumes/.gitkeep
+
+# Local candidate profile context (example templates are preserved)
+context/screening_qa.json
+context/profile_notes.md
+context/preferences.json
+context/company_list.txt
+!context/*.example.*
+
+# OS and Editor files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo

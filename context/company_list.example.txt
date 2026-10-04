@@ -1,0 +1,30 @@
+# Top Tech Companies with Public ATS Boards (Greenhouse, Lever, Ashby)
+# One company slug per line (comments starting with # are ignored)
+
+# Greenhouse Boards (https://boards.greenhouse.io/<slug>)
+gitlab
+stripe
+ramp
+instawork
+databricks
+mongodb
+coinbase
+okta
+twilio
+highradius
+zenoti
+zscaler
+
+# Ashby Boards (https://jobs.ashbyhq.com/<slug>)
+replit
+perplexity
+harvey
+suno
+synthesia
+grafana-labs
+elevenlabs
+
+# Lever Boards (https://jobs.lever.co/<slug>)
+inmobi
+spotify
+canva
