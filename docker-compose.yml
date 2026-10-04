@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  job-hunter:
+    build: .
+    container_name: job-hunter-revops
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./context:/app/context
+      - ./resumes:/app/resumes
+    environment:
+      - HEADLESS=true
+      - MIN_FIT_SCORE=70
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    restart: unless-stopped

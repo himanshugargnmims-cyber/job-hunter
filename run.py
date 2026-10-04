@@ -41,6 +41,7 @@ Examples:
     mode_group = parser.add_mutually_exclusive_group()
     mode_group.add_argument("--setup", action="store_true", help="Run interactive profile onboarding wizard")
     mode_group.add_argument("--ui", action="store_true", help="Start local Web UI dashboard at http://localhost:8080")
+    mode_group.add_argument("--revops", action="store_true", help="Run RevOps & GTM Strategy intelligence simulation suite")
     mode_group.add_argument("--scrape", action="store_true", help="Scrape live job listings from ATS platforms")
     mode_group.add_argument("--match", action="store_true", help="Evaluate resume fit against discovered jobs")
     mode_group.add_argument("--apply", action="store_true", help="Submit applications for high-matching jobs")
@@ -57,6 +58,48 @@ Examples:
     parser.add_argument("--port", type=int, default=8080, help="Port for the Web UI server (default: 8080)")
 
     args = parser.parse_args()
+
+    # 0. REVOPS SUITE
+    if args.revops:
+        from revops_kit.forecasting_engine import RevenueForecaster
+        from revops_kit.pipeline_velocity import PipelineVelocityCalculator
+        from revops_kit.lead_icp_scorer import ICPScoringEngine
+        from revops_kit.executive_kpi_dashboard import ExecutiveDashboardGenerator
+
+        print("\n" + "#" * 72)
+        print("   NEXUS REVOPS & GTM STRATEGY INTELLIGENCE SIMULATION SUITE")
+        print("#" * 72)
+
+        # 1. Forecasting & MAPE
+        forecaster = RevenueForecaster(target_quarterly_quota=4000000.0)
+        sample_deals = [
+            {"name": "Enterprise Cloud Migration", "acv": 850000, "stage": "Stage 5 - Security & Legal Review", "category": "Commit"},
+            {"name": "FinTech Core Modernization", "acv": 1200000, "stage": "Stage 4 - Business Proposal & Pricing", "category": "Best Case"},
+            {"name": "Global Payments Rollout", "acv": 1500000, "stage": "Stage 6 - Closed Won", "category": "Closed Won"},
+            {"name": "SaaS Platform Expansion", "acv": 450000, "stage": "Stage 3 - Technical Validation / POC", "category": "Pipeline"},
+        ]
+        forecaster.print_executive_forecast_summary(
+            sample_deals,
+            historical_actuals=[3200000, 3600000, 3400000, 3900000],
+            historical_forecasts=[3450000, 3800000, 3550000, 4050000]
+        )
+
+        # 2. Pipeline Velocity
+        vel = PipelineVelocityCalculator(num_opportunities=95, win_rate_pct=26.0, avg_deal_size=88000.0, sales_cycle_days=64)
+        vel.print_velocity_report()
+
+        # 3. ICP Scoring Matrix
+        icp = ICPScoringEngine()
+        sample_accounts = [
+            {"name": "Stripe", "employee_count": 8000, "industry": "FinTech / Payments", "tech_stack": ["Salesforce", "Snowflake", "AWS", "Segment"], "recent_funding_series": "Public", "hiring_growth_pct": 20, "has_global_presence": True},
+            {"name": "Ramp", "employee_count": 950, "industry": "FinTech SaaS", "tech_stack": ["HubSpot", "Snowflake", "Stripe"], "recent_funding_series": "Series D", "hiring_growth_pct": 35, "has_global_presence": True},
+        ]
+        icp.print_icp_report(sample_accounts)
+
+        # 4. SaaS KPI Scorecard
+        dash = ExecutiveDashboardGenerator()
+        dash.print_board_dashboard()
+        return
 
     # 1. SETUP WIZARD
     if args.setup:

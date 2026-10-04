@@ -232,7 +232,28 @@ HTML_PAGE = """<!DOCTYPE html>
       <p class="subtitle">Upload your resume, customize your target variables, and start automated job searching.</p>
     </header>
 
-    <div id="status-banner"></div>
+    <!-- RevOps & Pipeline Intelligence Scorecard -->
+    <div class="card" style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); border-left: 4px solid #3b82f6;">
+      <div class="card-title">📈 RevOps & Pipeline Telemetry Command Center</div>
+      <div class="card-subtitle">Real-time GTM velocity, forecast confidence, and opportunity acquisition metrics.</div>
+      <div class="grid-3" style="margin-top: 15px;">
+        <div style="background: rgba(15, 23, 42, 0.6); padding: 16px; border-radius: 8px; border: 1px solid #334155; text-align: center;">
+          <div style="font-size: 0.8rem; color: #94a3b8; text-transform: uppercase;">Quarterly Revenue Velocity</div>
+          <div style="font-size: 1.6rem; font-weight: 700; color: #38bdf8; margin-top: 4px;" id="kpi-velocity">$3.10M</div>
+          <div style="font-size: 0.75rem; color: #34d399; margin-top: 2px;">+40.2% with RevOps levers</div>
+        </div>
+        <div style="background: rgba(15, 23, 42, 0.6); padding: 16px; border-radius: 8px; border: 1px solid #334155; text-align: center;">
+          <div style="font-size: 0.8rem; color: #94a3b8; text-transform: uppercase;">Forecast Variance (MAPE)</div>
+          <div style="font-size: 1.6rem; font-weight: 700; color: #34d399; margin-top: 4px;" id="kpi-mape">5.4%</div>
+          <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 2px;">Top-Decile Forecasting Rigor</div>
+        </div>
+        <div style="background: rgba(15, 23, 42, 0.6); padding: 16px; border-radius: 8px; border: 1px solid #334155; text-align: center;">
+          <div style="font-size: 0.8rem; color: #94a3b8; text-transform: uppercase;">SaaS Magic Number & NRR</div>
+          <div style="font-size: 1.6rem; font-weight: 700; color: #fbbf24; margin-top: 4px;" id="kpi-magic">1.25x / 115%</div>
+          <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 2px;">Hyper-Efficient Growth</div>
+        </div>
+      </div>
+    </div>
 
     <!-- Step 1: Upload Resume -->
     <div class="card">
@@ -428,6 +449,20 @@ HTML_PAGE = """<!DOCTYPE html>
       } catch (e) {
         console.error("Config load error:", e);
       }
+
+      try {
+        const revRes = await fetch('/api/get_revops_metrics');
+        if (revRes.ok) {
+          const revData = await revRes.json();
+          if (revData.success) {
+            document.getElementById('kpi-velocity').innerText = '$' + (revData.velocity.quarterly_revenue_velocity / 1000000).toFixed(2) + 'M';
+            document.getElementById('kpi-mape').innerText = revData.mape + '%';
+            document.getElementById('kpi-magic').innerText = revData.kpis.magic_number + 'x / ' + revData.kpis.net_retention_rate_pct + '%';
+          }
+        }
+      } catch (e) {
+        console.error("RevOps metrics load error:", e);
+      }
     });
 
     function populateForm(data) {
@@ -610,6 +645,8 @@ class JobHunterHandler(BaseHTTPRequestHandler):
             self.wfile.write(HTML_PAGE.encode("utf-8"))
         elif url.path == "/api/get_config":
             self.handle_get_config()
+        elif url.path == "/api/get_revops_metrics":
+            self.handle_get_revops_metrics()
         elif url.path == "/api/get_logs":
             self.handle_get_logs()
         else:
@@ -650,6 +687,41 @@ class JobHunterHandler(BaseHTTPRequestHandler):
             data["target_companies"] = [l.strip() for l in comp_file.read_text(encoding="utf-8").splitlines() if l.strip() and not l.startswith("#")]
 
         self.send_json(data)
+
+    def handle_get_revops_metrics(self):
+        try:
+            sys.path.insert(0, str(BASE_DIR))
+            from revops_kit.forecasting_engine import RevenueForecaster
+            from revops_kit.pipeline_velocity import PipelineVelocityCalculator
+            from revops_kit.executive_kpi_dashboard import ExecutiveDashboardGenerator
+
+            forecaster = RevenueForecaster(target_quarterly_quota=4000000.0)
+            deals = [
+                {"name": "Enterprise Cloud Migration", "acv": 850000, "stage": "Stage 5 - Security & Legal Review", "category": "Commit"},
+                {"name": "FinTech Core Modernization", "acv": 1200000, "stage": "Stage 4 - Business Proposal & Pricing", "category": "Best Case"},
+                {"name": "Global Payments Rollout", "acv": 1500000, "stage": "Stage 6 - Closed Won", "category": "Closed Won"},
+                {"name": "SaaS Platform Expansion", "acv": 450000, "stage": "Stage 3 - Technical Validation / POC", "category": "Pipeline"},
+            ]
+            f_res = forecaster.compute_weighted_pipeline(deals)
+            mape = forecaster.calculate_mape([3200000, 3600000, 3400000, 3900000], [3450000, 3800000, 3550000, 4050000])
+
+            vel_calc = PipelineVelocityCalculator(num_opportunities=95, win_rate_pct=26.0, avg_deal_size=88000.0, sales_cycle_days=64)
+            vel = vel_calc.calculate_velocity()
+            sim = vel_calc.simulate_revops_interventions()
+
+            dash_gen = ExecutiveDashboardGenerator()
+            kpis = dash_gen.compute_saas_metrics()
+
+            self.send_json({
+                "success": True,
+                "forecast": f_res,
+                "mape": mape,
+                "velocity": vel,
+                "simulations": sim,
+                "kpis": kpis
+            })
+        except Exception as e:
+            self.send_json({"success": False, "error": str(e)})
 
     def handle_upload_resume(self):
         content_type = self.headers.get("Content-Type", "")

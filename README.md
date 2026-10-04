@@ -1,174 +1,228 @@
-# 🎯 Job Hunter — Automated ATS Job Search & Application Engine
+# ⚡ Nexus: Autonomous RevOps, GTM Strategy & Career Opportunity Intelligence Engine
 
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![Playwright Automation](https://img.shields.io/badge/playwright-tested-green.svg)](https://playwright.dev/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+<div align="center">
 
-An end-to-end, privacy-first automated job discovery, resume matching, and ATS application engine. It discovers live postings across **Greenhouse**, **Lever**, and **Ashby**, evaluates job descriptions against your resume variants, verifies salary floors, auto-fills application forms with **Playwright**, and logs every step across local **SQLite**, **CSV**, and **Excel** trackers.
+[![GitHub stars](https://img.shields.io/github/stars/himanshugargnmims-cyber/job-hunter?style=for-the-badge&logo=github&color=gold)](https://github.com/himanshugargnmims-cyber/job-hunter/stargazers)
+[![GitHub forks](https://img.shields.io/github/forks/himanshugargnmims-cyber/job-hunter?style=for-the-badge&logo=github&color=blue)](https://github.com/himanshugargnmims-cyber/job-hunter/network/members)
+[![CI Build Status](https://img.shields.io/github/actions/workflow/status/himanshugargnmims-cyber/job-hunter/ci.yml?branch=main&style=for-the-badge&logo=github-actions)](https://github.com/himanshugargnmims-cyber/job-hunter/actions)
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
+[![Playwright](https://img.shields.io/badge/Playwright-Automated-45ba4b?style=for-the-badge&logo=playwright&logoColor=white)](https://playwright.dev/)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://docker.com)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 
----
+**An Enterprise-Grade Revenue Operations (RevOps) Engine & Autonomous Opportunity Acquisition Platform.**  
+*Applying the algorithmic precision, forecasting rigor, and pipeline velocity models of high-growth B2B SaaS to strategic career capital and enterprise job intelligence.*
 
-## ⚡ Key Capabilities
+[Explore Architecture](#-system-architecture) • [Quick Start](#-quick-start) • [RevOps Suite](#-revops--gtm-strategy-suite) • [Recruiter Walkthrough](#-for-hiring-managers--recruiters) • [Roadmap](#-community-roadmap--100k-stars-vision)
 
-- **Multi-ATS Live Scraping**: Ingests live job listings and rich markdown descriptions from Greenhouse (`boards.greenhouse.io`), Lever (`jobs.lever.co`), and Ashby (`jobs.ashbyhq.com`).
-- **Multi-Resume Routing & Scoring**: Parses your resume (PDF/TXT), evaluates alignment against job requirements, and computes an objective 0–100% fit score with decision rationale without hallucinating text.
-- **Automated Form Pre-filling & Submissions**: Playwright-driven browser automation that uploads resumes, handles text inputs, radio buttons, dropdowns, and dynamically rendered EEO/diversity questions.
-- **AI-Powered Screening Answering**: Uses **Google Gemini** grounded in your personal profile notes to answer open-ended screening questions, with robust offline heuristics fallback.
-- **Strict Salary Floor Filter**: Automatically filters out roles paying below your compensation threshold (INR LPA, USD, EUR).
-- **Automated Security Code / OTP Solver**: Optional Gmail IMAP integration that automatically fetches email verification codes for ATS portals.
-- **Two User Interfaces**:
-  - **🖥️ Web UI Dashboard**: Drag-and-drop your resume in your browser, tweak all variables on an interactive form, and launch with one click.
-  - **⌨️ Interactive CLI Wizard**: Step-by-step terminal onboarding prompts.
-- **Zero Privacy Leaks**: Clean template architecture with strict `.gitignore` ensuring your personal resumes, contact details, logs, and passwords never touch Git.
+</div>
 
 ---
 
-## 📁 Repository Directory Structure
+## 🎯 The Core Thesis: Career-as-a-Revenue-Engine
 
-```text
-job-hunter/
-├── context/
-│   ├── preferences.example.json   # Template: target titles, locations, salary floors
-│   ├── screening_qa.example.json  # Template: candidate contact, notice period, work auth
-│   ├── profile_notes.example.md   # Template: candidate achievements & executive summary
-│   └── company_list.example.txt   # Template: target company ATS slugs
-├── data/                          # Application database (jobs.db), CSV, Excel (gitignored)
-├── logs/                          # Verification screenshots & execution logs (gitignored)
-├── resumes/                       # Pre-made resume variants / PDFs (gitignored)
-│   └── sample_resume.txt          # Sample resume template for onboarding
-├── scripts/
-│   ├── applier.py                 # Core Playwright ATS application automation
-│   ├── hard_check_applier.py      # Hard-check verified ATS submitter with OTP solver
-│   ├── scraper.py                 # Multi-ATS scraper (Greenhouse, Lever, Ashby)
-│   ├── resume_selector.py         # JD parsing and resume fit scoring engine (0-100%)
-│   ├── salary_filter.py           # Compensation floor enforcement filter
-│   ├── question_answerer.py       # Gemini AI screening question answering module
-│   ├── sheet_updater.py           # SQLite, CSV & Google Sheets dual-tier tracker
-│   ├── export_excel.py            # Formatted multi-tab Excel dashboard generator
-│   ├── setup_profile.py           # Interactive CLI onboarding wizard
-│   └── web_ui.py                  # Local Web UI server (zero external dependencies)
-├── .env.example                   # Environment configuration template
-├── .gitignore                     # Comprehensive privacy & runtime file ignore rules
-├── requirements.txt               # Python package dependencies
-└── run.py                         # Master CLI orchestrator entrypoint
+Most job searches are handled like chaotic outbound spam: high effort, low signal, and zero telemetry.
+
+**Nexus** reframes high-stakes career advancement through the lens of an enterprise **Chief Revenue Officer (CRO)**:
+- **The Candidate** is an **Enterprise Solution / High-Value Asset**.
+- **Target Companies & JDs** are **Target Accounts & Ideal Customer Profiles (ICPs)**.
+- **Resume Archetypes** are **Tailored Value Propositions** mapped to distinct buyer needs.
+- **The Application Funnel** is treated with the exact mathematical discipline of **B2B Pipeline Velocity** ($V = \frac{N \times W \times S}{L}$).
+- **Compensation & Career Goals** are guided by **AOP Quota Attainment & MAPE Forecasting Rigor**.
+
+---
+
+## 🏛️ System Architecture
+
+```mermaid
+flowchart TD
+    subgraph Sourcing ["1. Sourcing & Account Discovery"]
+        A1["Greenhouse Live Board API"]
+        A2["Lever Structured Postings API"]
+        A3["Ashby High-Velocity API"]
+    end
+
+    subgraph Intelligence ["2. Opportunity Intelligence & Fit Scoring"]
+        B1["JD Requirement Tokenizer"]
+        B2["6-Charter Resume Routing Engine"]
+        B3["Salary Floor Filter (INR/USD/EUR)"]
+        B4["ICP & Account Propensity Scorer"]
+    end
+
+    subgraph Execution ["3. Autonomous Execution & Form Synthesis"]
+        C1["Playwright Stealth Browser Engine"]
+        C2["Gemini AI Grounded Q&A Assistant"]
+        C3["Greenhouse OTP Auto-Solver (IMAP)"]
+    end
+
+    subgraph Telemetry ["4. RevOps Persistence & Analytics"]
+        D1[("SQLite Database Cache")]
+        D2[("CSV / Excel Executive Dashboard")]
+        D3["Pipeline Velocity & MAPE Engine"]
+        D4["Web UI & Telemetry Dashboard"]
+    end
+
+    Sourcing --> Intelligence
+    Intelligence --> Execution
+    Execution --> Telemetry
+
+    style Sourcing fill:#0f172a,stroke:#3b82f6,color:#fff
+    style Intelligence fill:#0f172a,stroke:#10b981,color:#fff
+    style Execution fill:#0f172a,stroke:#f59e0b,color:#fff
+    style Telemetry fill:#0f172a,stroke:#a855f7,color:#fff
 ```
 
 ---
 
-## 🚀 Quick Start (In 3 Simple Steps)
+## 💼 Why Hiring Managers & Recruiters Love This Project
 
-### 1. Clone & Install Dependencies
+When evaluating candidates for **Revenue Operations (RevOps)**, **Go-To-Market (GTM) Strategy**, **Chief of Staff**, or **Strategic Operations**, this repository serves as live proof of executive-level execution:
 
+| RevOps Core Competency | How Nexus Proves It in Code |
+| :--- | :--- |
+| **Pipeline Forecasting & Variance Reduction** | [`revops_kit/forecasting_engine.py`](revops_kit/forecasting_engine.py) implements weighted probability modeling, AOP pacing, and Mean Absolute Percentage Error (**MAPE**) reduction (<12% error threshold). |
+| **GTM Velocity & Conversion Sensitivity** | [`revops_kit/pipeline_velocity.py`](revops_kit/pipeline_velocity.py) models sales cycle compression, win-rate sensitivity, and compound ARR acceleration. |
+| **Account Tiering & ICP Scoring** | [`revops_kit/lead_icp_scorer.py`](revops_kit/lead_icp_scorer.py) implements a 4-pillar scoring algorithm (firmographic, technographic, intent, and strategic fit) that directly powers the resume-to-JD matching engine. |
+| **Board-Level Financial Telemetry** | [`revops_kit/executive_kpi_dashboard.py`](revops_kit/executive_kpi_dashboard.py) computes canonical SaaS metrics: **ARR, NRR, GRR, CAC Payback, SaaS Magic Number, and Rule of 40**. |
+| **Complex Systems Automation** | [`scripts/hard_check_applier.py`](scripts/hard_check_applier.py) demonstrates enterprise-grade browser orchestration, automated email OTP parsing via IMAP, and bulletproof DOM state verification. |
+| **AI Grounding & Knowledge Retrieval** | [`scripts/question_answerer.py`](scripts/question_answerer.py) uses **Google Gemini** with zero-hallucination candidate profile grounding to answer open-ended screening questions with quantified impact. |
+
+---
+
+## ⚡ Quick Start (Ready in 2 Minutes)
+
+### 1. Clone & Install
 ```bash
-git clone https://github.com/<your-username>/job-hunter.git
+git clone https://github.com/himanshugargnmims-cyber/job-hunter.git
 cd job-hunter
 
 python3 -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
 
 pip install -r requirements.txt
 playwright install chromium
 ```
 
----
-
-### 2. Configure Your Profile & Resume
-
-You can set up your profile using either the **Web Interface** or the **Terminal Wizard**:
-
-#### Option A: Web UI Dashboard (Recommended)
+### 2. Onboard via Web UI (Drag & Drop)
 ```bash
 python run.py --ui
 ```
-Open **`http://localhost:8080`** in your browser. Drag and drop your resume (PDF or TXT). The system extracts your contact details, skills, and links automatically. Review the form, adjust any variables, and click **Save Profile & Preferences**.
+> Open **`http://localhost:8080`** in your browser.  
+> 1. Drag & drop your resume PDF.  
+> 2. The parser auto-extracts contact details, experience, and links.  
+> 3. Tweak target roles, location hubs, salary floors, and target companies.  
+> 4. Hit **Save & Launch Pipeline**!
 
-#### Option B: Terminal Setup Wizard
-```bash
-python run.py --setup
-```
-An interactive step-by-step CLI that prompts for your resume path, personal details, salary floor, target job titles, locations, and companies.
+*(Alternatively, run the guided terminal wizard: `python run.py --setup`)*
 
 ---
 
-### 3. Run the Job Hunter
+## 📊 RevOps & GTM Strategy Suite
+
+Run the full executive RevOps simulation directly from the CLI:
 
 ```bash
-# Ingest live postings matching your titles and locations
+python run.py --revops
+```
+
+```text
+======================================================================
+    EXECUTIVE REVENUE FORECAST & AOP PACING REPORT
+======================================================================
+  Target Operating Quota (AOP) : $4,000,000.00
+  Total Unweighted Pipeline    : $4,000,000.00 (1.0x Coverage)
+  Stage-Weighted Probability   : $3,390,000.00
+  Blended Executive Forecast   : $2,625,000.00 (65.6% Attainment)
+  Historical Forecast Accuracy (MAPE) : 5.41% [Top-Decile Enterprise Rigor]
+----------------------------------------------------------------------
+  REVOPS LEVER OPTIMIZATION IMPACT (Sensitivity Model):
+    1. Win Rate (+3% via Deal Desk)       : +$357,585.94 (+11.5%)
+    2. Cycle Compression (-8 days via CPQ): +$442,725.45 (+14.3%)
+    3. ACV Expansion (+10% via Packaging) : +$309,907.82 (+10.0%)
+    --> COMPOUNDED REVOPS IMPACT          : +$1,246,442.42 (+40.2%)
+======================================================================
+```
+
+Read the full [RevOps Playbook & Strategy Reference](docs/REVOPS_PLAYBOOK.md) for deep-dives into operating rhythms, deal desk structures, and SaaS metric formulas.
+
+---
+
+## 🛠️ CLI Command Reference
+
+Nexus provides a unified CLI orchestrator:
+
+```bash
+# Interactive setup wizard
+python run.py --setup
+
+# Launch modern Web UI dashboard
+python run.py --ui
+
+# Run RevOps forecasting & pipeline velocity suite
+python run.py --revops
+
+# Ingest live postings matching target filters
 python run.py --scrape
 
-# Evaluate and score your resume against all discovered jobs
+# Evaluate & score resume variants against scraped jobs (0-100%)
 python run.py --match
 
-# Auto-apply to matched jobs (simulates in review mode)
+# Auto-apply with Playwright (review simulation mode)
 python run.py --apply --dry-run
 
-# Run the complete end-to-end pipeline (Scrape -> Match -> Apply)
+# Run full end-to-end pipeline (Scrape -> Match -> Apply)
 python run.py --all
 
-# View live application pipeline statistics
+# View database metrics & tracker summary
 python run.py --stats
 
-# Export tracker to formatted Excel workbook
+# Export multi-tab formatted Excel executive dashboard
 python run.py --export
 ```
 
 ---
 
-## ⚙️ Configurable Variables Reference
+## 🐳 Docker Support
 
-All variables can be configured via `run.py --setup`, the Web UI, or directly in `context/`:
+Run Nexus in a standalone container with zero local environment dependencies:
 
-| Variable Category | Config Keys | Description |
-| :--- | :--- | :--- |
-| **Personal Identity** | `full_name`, `email`, `phone`, `location` | Candidate name, contact info, and current city/country. |
-| **Work Authorization** | `work_authorization`, `requires_sponsorship` | Citizenship status and whether visa sponsorship is required. |
-| **Availability** | `current_notice_period`, `earliest_start_date` | Notice period (e.g. `Immediate`, `30 Days`, `60 Days`). |
-| **Compensation** | `current_ctc`, `expected_ctc`, `min_salary_floor_lpa`, `min_salary_floor_usd` | Explicit compensation expectations and minimum salary threshold. Roles below this floor are automatically skipped. |
-| **Current Role** | `current_company`, `current_title`, `total_years_experience` | Present employer, title, and years of experience. |
-| **Target Roles** | `target_roles` | Comma-separated job titles (e.g., `Strategy & Operations`, `Chief of Staff`, `Program Manager`). |
-| **Target Locations** | `target_locations` | Geographical filters (e.g., `Remote`, `San Francisco`, `Bengaluru`, `London`). |
-| **Exclusions** | `excluded_keywords` | Negative keywords to auto-reject (e.g., `Intern`, `Software Engineer`, `QA`). |
-| **Match Threshold** | `minimum_match_score` | Minimum percentage fit score (e.g. `70`) required to trigger application. |
-| **Target ATS Slugs** | `target_companies` | Company board slugs for Greenhouse, Lever, and Ashby (e.g., `gitlab`, `stripe`, `ramp`). |
-| **AI Question Answering** | `GEMINI_API_KEY` | Optional Google Gemini key to generate 2-3 sentence answers to screening questions. |
-| **Browser Visibility** | `HEADLESS` | Set `false` to watch browser submissions live, or `true` for headless background execution. |
-
----
-
-## 🔒 Security & Privacy
-
-This repository is designed from the ground up for open sharing:
-- All real resumes (`resumes/*.pdf`, `resumes/*.docx`) are **strictly gitignored**.
-- All personal credentials (`.env`, `credentials.json`) are **strictly gitignored**.
-- All local application trackers (`data/*.db`, `data/*.csv`, `data/*.xlsx`) and screenshots (`logs/*`) are **strictly gitignored**.
-- Fresh clones start with clean `.example` templates ready to be populated by the setup wizard.
-
----
-
-## 📤 How to Publish to Your GitHub
-
-Follow these steps to push this project to your own GitHub account:
-
-### Method 1: Using GitHub CLI (`gh`)
 ```bash
-# Authenticate GitHub CLI
-gh auth login
-
-# Create a new repository and push
-gh repo create job-hunter --public --source=. --remote=origin --push
+docker compose up -d
 ```
+Access the Web UI immediately at `http://localhost:8080`.
 
-### Method 2: Using the GitHub Web Interface
-1. Go to [github.com/new](https://github.com/new) and create a repository named **`job-hunter`**.
-2. Connect and push your local commits:
-   ```bash
-   git remote add origin https://github.com/<your-username>/job-hunter.git
-   git branch -M main
-   git push -u origin main
-   ```
+---
+
+## 🔒 Security, Privacy & Sanitization
+
+This repository is strictly privacy-hardened:
+- **No Personal Data Tracked**: All real resumes (`resumes/*.pdf`), session files (`sessions/*`), application databases (`data/*.db`), Excel workbooks (`*.xlsx`), and screenshot logs (`logs/*`) are **strictly gitignored**.
+- **Zero Secrets**: Credentials and API keys are loaded strictly from `.env` (gitignored).
+- **Template Architecture**: New users start cleanly with `.example` templates generated on the fly.
+
+---
+
+## 🌟 Community Roadmap & 100K Stars Vision
+
+We are building the definitive open-source **Career Capital & Revenue Operations Operating System**:
+
+- [x] Multi-ATS live ingestion (Greenhouse, Lever, Ashby)
+- [x] 6-Charter Resume Routing Engine with objective fit scoring
+- [x] Playwright form auto-filling with email OTP resolution
+- [x] Google Gemini grounded AI screening Q&A
+- [x] RevOps Intelligence Suite (Forecasting, Velocity, MAPE, ICP)
+- [x] Zero-dependency Web UI Dashboard & Terminal Wizard
+- [x] GitHub Actions automated daily scouting workflow
+- [ ] **v2.0**: Integration with Salesforce & HubSpot CPQ APIs for live CRM sync
+- [ ] **v2.1**: Automated LinkedIn Recruiter InMail response triage via LLM
+- [ ] **v2.2**: Multi-agent collaborative interview prep simulator
+- [ ] **v2.3**: One-click cloud deploy (Railway, Render, AWS ECS)
+
+### How to Support
+If you find this project valuable, **give it a star ⭐** and share it with founders, RevOps leaders, and operators!
 
 ---
 
 ## 📄 License
 
-Distributed under the MIT License. See `LICENSE` for more information.
+Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for details.

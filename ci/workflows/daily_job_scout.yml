@@ -1,0 +1,40 @@
+name: Daily Autonomous Job & RevOps Scout
+
+on:
+  schedule:
+    # Runs daily at 04:00 UTC (09:30 AM IST)
+    - cron: '0 4 * * 1-5'
+  workflow_dispatch:
+
+jobs:
+  scout-and-match:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        playwright install chromium
+
+    - name: Run ATS Scraper & Resume Matcher
+      env:
+        HEADLESS: "true"
+        MIN_FIT_SCORE: "70"
+      run: |
+        python run.py --scrape --batch-size 15
+        python run.py --match
+
+    - name: Execute RevOps Pipeline Simulation
+      run: |
+        python run.py --revops
