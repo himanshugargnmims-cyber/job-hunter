@@ -8,6 +8,7 @@ import sys
 import os
 import time
 import re
+import json
 import sqlite3
 from pathlib import Path
 from playwright.sync_api import sync_playwright, Page

@@ -18,6 +18,7 @@ Saves to job-hunter/data/ and copies directly to Desktop for instant access.
 import os
 import re
 import sys
+import json
 import shutil
 import sqlite3
 from pathlib import Path

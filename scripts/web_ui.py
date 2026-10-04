@@ -864,7 +864,6 @@ MIN_FIT_SCORE={data.get('minimum_match_score', 70)}
         self.send_json({"success": True})
 
     def handle_get_logs(self):
-        global pipeline_running, latest_logs
         self.send_json({"logs": "".join(latest_logs), "is_done": not pipeline_running})
 
     def send_json(self, data: dict):

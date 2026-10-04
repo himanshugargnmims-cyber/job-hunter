@@ -55,7 +55,7 @@ def fallback_answer(question_text: str, qa_data: dict) -> str:
     if any(k in q_norm for k in ["sponsorship", "authorized", "visa"]):
         return work_auth
 
-    if any(k in q_norm for k in ["relocate", "commute", "relocation", "location"]):
+    if any(k in q_norm for k in ["relocate", "commute", "relocation", "location", "located", "where are you", "based"]):
         reloc = qa_data.get("willing_to_relocate", "Open to discussing relocation based on role.")
         return f"I am based in {location}. {reloc}"
 
