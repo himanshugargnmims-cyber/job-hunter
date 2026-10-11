@@ -17,6 +17,7 @@ import sys
 import re
 import json
 import time
+import sqlite3
 import argparse
 from pathlib import Path
 from datetime import datetime
@@ -116,16 +117,19 @@ class LinkedInApplier:
 
             # Check for unauthenticated signup/login form elements
             has_login_form = page.locator('input[autocomplete="username"], input[name="session_key"], button:has-text("Agree & Join")').count() > 0
-            has_auth_nav = page.locator('#global-nav, nav.global-nav, .global-nav__me, button.global-nav__primary-link, .global-nav__nav').count() > 0
-
-            if has_auth_nav:
-                return True
             if has_login_form:
                 return False
 
-            # Check if job search cards are rendered
-            has_cards = page.locator('.jobs-search-results-list, .job-card-container, [data-occludable-job-id], [componentkey*="job-card-component-ref-"]').count() > 0
+            has_auth_nav = page.locator('#global-nav, nav.global-nav, .global-nav__me, button.global-nav__primary-link, .global-nav__nav, header nav, a[href*="/messaging"], a[href*="/feed"]').count() > 0
+            if has_auth_nav:
+                return True
+
+            # Check if job search cards or job details are rendered
+            has_cards = page.locator('.jobs-search-results-list, .job-card-container, [data-occludable-job-id], [componentkey*="job-card-component-ref-"], .job-details-jobs-unified-top-card, #job-details').count() > 0
             if has_cards:
+                return True
+
+            if "/jobs/view/" in curr_url and not has_login_form:
                 return True
 
             return False
@@ -320,6 +324,14 @@ class LinkedInApplier:
                 if (p) q += p.innerText + ' ';
                 return q;
             }''')
+
+            # CRITICAL: Strictly skip the Resume selection fieldset/radiogroup so it never overwrites the selected target resume!
+            try:
+                fs_text = fs.inner_text().lower()
+                if any(k in fs_text for k in ["resume", ".pdf", "upload a resume", "document"]):
+                    continue
+            except Exception:
+                pass
 
             r_inputs = fs.locator('input[type="radio"]').all()
             if not r_inputs:
@@ -765,7 +777,7 @@ class LinkedInApplier:
     def apply_to_direct_job_page(self, page: Page, direct_url: str, job_metadata: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
         """Applies to a specific LinkedIn job posting by direct URL."""
         if not self.is_authenticated(page):
-            auth_ok = self.wait_for_authentication(page)
+            auth_ok = self.wait_for_authentication(page, timeout_seconds=15)
             if not auth_ok:
                 return None
 
