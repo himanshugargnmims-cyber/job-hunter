@@ -59,10 +59,12 @@ resumes/*.doc
 !resumes/.gitkeep
 
 # Local candidate profile context (example templates are preserved)
+context/profile.json
 context/screening_qa.json
 context/profile_notes.md
 context/preferences.json
 context/company_list.txt
+resumes/tailored/*
 !context/*.example.*
 
 # OS and Editor files

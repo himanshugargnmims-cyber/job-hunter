@@ -83,10 +83,10 @@ class ResumeSelector:
                 "board reporting", "executive partner", "decision log", "operating rhythm", "cross-functional"
             ],
             "program_management": [
-                "program management", "program manager", "technical program manager", "tpm", "pgmp",
+                "program management", "program manager", "business program manager", "pgmp",
                 "pmo", "cross-functional delivery", "milestones", "governance", "operating rhythm",
-                "cadence", "business transformation", "dependency management", "scrum", "agile",
-                "roadmap", "engineering alignment", "delivery"
+                "cadence", "business transformation", "dependency management", "strategic programs",
+                "roadmap", "enterprise delivery", "change management"
             ],
             "customer_success": [
                 "customer success", "retention", "churn", "expansion", "nrr", "net retention rate",
@@ -148,6 +148,43 @@ class ResumeSelector:
 
         combined_jd = f"{title} {job_description}".lower()
         title_norm = title.lower()
+
+        # Strict negative title filters for executive business/strategy profile
+        NEGATIVE_TITLE_KEYWORDS = [
+            "technical program manager", "tpm", "engineering program manager", "software program manager",
+            "software engineer", "backend engineer", "frontend engineer", "full stack", "devops", "sre",
+            "data engineer", "qa engineer", "sdet", "warehouse", "manufacturing", "plant", "factory",
+            "civil", "mechanical", "construction", "real estate", "store manager", "branch manager",
+            "assistant", "executive assistant", "secretary", "receptionist", "intern",
+            "internship", "trainee", "telesales", "telecaller", "call center", "bpo",
+            "quality assurance engineer", "hardware", "fleet", "mining", "tobacco",
+            "cement", "steel", "textile", "agriculture", "fertilizer", "chemical",
+            "petroleum", "refinery", "drilling", "production", "maintenance", "qa/qc"
+        ]
+        if any(re.search(r"\b" + re.escape(neg) + r"\b", title_norm) for neg in NEGATIVE_TITLE_KEYWORDS):
+            return {
+                "selected_resume": "Disqualified",
+                "fit_score": 0.0,
+                "rationale": f"Role disqualified due to domain mismatch or zero-tolerance exclusion in title: '{title}'.",
+                "variant_scores": {v.filename: 0.0 for v in self.variants}
+            }
+
+        # Deterministic primary charter routing
+        # RevOps / SalesOps -> V2_RevOps.pdf
+        is_revops = any(k in title_norm for k in ["revops", "revenue operations", "sales ops", "sales operations", "commercial operations", "deal desk"])
+        # Customer Success -> V5_Customer_Success.pdf
+        is_cs = any(k in title_norm for k in ["customer success", "client success", "retention", "customer lifecycle", "customer experience", "post-sales"])
+        # Chief of Staff / Founder's Office -> V3_Strategy_Ops_ChiefOfStaff.pdf
+        is_cos = any(k in title_norm for k in ["chief of staff", "founder's office", "founders office", "ceo office", "cro office"])
+        # GTM / Commercial Strategy -> V1_GTM_Revenue_Strategy.pdf
+        is_gtm = any(k in title_norm for k in ["gtm", "go-to-market", "revenue strategy", "commercial strategy", "monetization"])
+        # BizOps / Strategy & Ops -> V3_Strategy_Ops_ChiefOfStaff.pdf
+        is_bizops = any(k in title_norm for k in ["bizops", "strategy & operations", "strategy and operations", "corporate strategy"])
+        # Business Programs / Strategic Programs -> V4_Program_Management.pdf
+        is_prog = any(k in title_norm for k in ["program manager", "strategic programs", "business program", "transformation manager"])
+        # Central Ops / Operations Excellence -> V6_Operations_Excellence.pdf (ONLY if explicitly ops excellence / central ops)
+        is_ops_exc = any(k in title_norm for k in ["operational excellence", "operations excellence", "process excellence", "central operations"])
+
         variant_scores = {}
         variant_rationales = {}
 
@@ -158,55 +195,55 @@ class ResumeSelector:
             keywords = self.domain_keywords.get(archetype, [])
             arch_hits = [kw for kw in keywords if re.search(r"\b" + re.escape(kw) + r"\b", combined_jd)]
 
-            # Check title affinity per archetype
+            # Check title affinity per archetype with strict anti-leakage guards
             title_bonus = 0.0
-            if archetype == "gtm_revenue_strategy":
-                if any(k in title_norm for k in ["gtm", "go-to-market", "revenue strategy", "commercial strategy", "pricing", "monetization"]):
-                    title_bonus += 25.0
-                    matches_found.append("Direct Title Match (GTM / Commercial Strategy)")
+            if archetype == "revenue_operations":
+                if is_revops:
+                    title_bonus += 40.0
+                    matches_found.append("Primary Charter Match: RevOps & Commercial Operations")
+                elif any(k in title_norm for k in ["revenue systems", "forecasting", "pipeline"]):
+                    title_bonus += 20.0
+                    matches_found.append("Partial Title Match (Revenue Systems / Planning)")
+
+            elif archetype == "customer_success":
+                if is_cs:
+                    title_bonus += 40.0
+                    matches_found.append("Primary Charter Match: Customer Success & Post-Sales")
+                elif any(k in title_norm for k in ["account management", "client experience"]):
+                    title_bonus += 20.0
+                    matches_found.append("Partial Title Match (Client Experience / Post-Sales)")
+
+            elif archetype == "strategy_bizops_cos":
+                if is_cos or is_bizops:
+                    title_bonus += 40.0
+                    matches_found.append("Primary Charter Match: Chief of Staff / BizOps")
+                elif any(k in title_norm for k in ["strategy", "strategic initiatives", "business operations"]):
+                    title_bonus += 20.0
+                    matches_found.append("Partial Title Match (Strategy / Business Operations)")
+
+            elif archetype == "gtm_revenue_strategy":
+                if is_gtm:
+                    title_bonus += 40.0
+                    matches_found.append("Primary Charter Match: GTM & Revenue Strategy")
                 elif any(k in title_norm for k in ["growth", "revenue", "commercial"]):
                     title_bonus += 15.0
                     matches_found.append("Partial Title Match (Growth / Commercial)")
 
-            elif archetype == "revenue_operations":
-                if any(k in title_norm for k in ["revops", "revenue operations", "sales ops", "sales operations", "commercial operations"]):
-                    title_bonus += 25.0
-                    matches_found.append("Direct Title Match (RevOps / SalesOps)")
-                elif any(k in title_norm for k in ["revenue systems", "forecasting", "pipeline"]):
-                    title_bonus += 15.0
-                    matches_found.append("Partial Title Match (Revenue Systems / Planning)")
-
-            elif archetype == "strategy_bizops_cos":
-                if any(k in title_norm for k in ["chief of staff", "founder", "founder's", "bizops", "strategy & operations", "strategy and operations", "corporate strategy"]):
-                    title_bonus += 25.0
-                    matches_found.append("Direct Title Match (Chief of Staff / BizOps / Founder's Office)")
-                elif any(k in title_norm for k in ["strategy", "strategic initiatives", "business operations"]):
-                    title_bonus += 15.0
-                    matches_found.append("Partial Title Match (Strategy / Business Operations)")
-
             elif archetype == "program_management":
-                if any(k in title_norm for k in ["program manager", "tpm", "technical program", "strategic programs", "pmo", "transformation manager"]):
-                    title_bonus += 25.0
-                    matches_found.append("Direct Title Match (Program Management / TPM / PMO)")
-                elif any(k in title_norm for k in ["program", "delivery", "transformation"]):
+                if is_prog and not any(k in title_norm for k in ["technical", "tpm", "engineering"]):
+                    title_bonus += 40.0
+                    matches_found.append("Primary Charter Match: Business Program Management")
+                elif any(k in title_norm for k in ["transformation", "strategic delivery"]):
                     title_bonus += 15.0
-                    matches_found.append("Partial Title Match (Program / Delivery)")
-
-            elif archetype == "customer_success":
-                if any(k in title_norm for k in ["customer success", "client success", "retention", "customer operations"]):
-                    title_bonus += 25.0
-                    matches_found.append("Direct Title Match (Customer Success / Client Retention)")
-                elif any(k in title_norm for k in ["account management", "client experience", "post-sales"]):
-                    title_bonus += 15.0
-                    matches_found.append("Partial Title Match (Account Management / Client Exp)")
+                    matches_found.append("Partial Title Match (Transformation)")
 
             elif archetype == "operations_excellence":
-                if any(k in title_norm for k in ["operational excellence", "operations director", "head of operations", "general manager operations", "central operations", "process excellence"]):
-                    title_bonus += 25.0
-                    matches_found.append("Direct Title Match (Operations Excellence / Central Ops)")
-                elif any(k in title_norm for k in ["operations", "operational", "process design"]):
+                if is_ops_exc:
+                    title_bonus += 40.0
+                    matches_found.append("Primary Charter Match: Operations Excellence / Central Ops")
+                elif not is_revops and not is_cos and not is_cs and any(k in title_norm for k in ["central ops", "process design"]):
                     title_bonus += 15.0
-                    matches_found.append("Partial Title Match (Operations)")
+                    matches_found.append("Partial Match (Central Ops)")
 
             score += title_bonus
 

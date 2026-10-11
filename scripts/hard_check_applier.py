@@ -24,6 +24,7 @@ import sys
 import os
 import re
 import time
+import random
 import json
 import sqlite3
 import imaplib
@@ -39,6 +40,16 @@ load_dotenv(BASE_DIR / ".env")
 sys.path.insert(0, str(BASE_DIR))
 
 from scripts.question_answerer import answer_custom_question, load_default_context_notes
+from scripts.company_policy import CompanyPolicyManager
+from scripts.eligibility import evaluate_eligibility
+from scripts.application_models import JobPosting, ATSPlatform
+from scripts.field_resolver import (
+    resolve_salary,
+    resolve_notice_period,
+    resolve_experience,
+    resolve_text_input,
+    resolve_radio_or_dropdown
+)
 
 try:
     from playwright_stealth import Stealth
@@ -69,6 +80,7 @@ CANDIDATE = {
     "first_name": QA_DATA.get("first_name", _name_parts[0] if _name_parts else "Alex"),
     "last_name": QA_DATA.get("last_name", _name_parts[-1] if len(_name_parts) > 1 else "Taylor"),
     "full_name": _full_name,
+    "name": _full_name,
     "email": os.getenv("GMAIL_USER") or QA_DATA.get("email", "candidate@example.com"),
     "phone": _phone,
     "phone_digits": _digits[-10:] if len(_digits) >= 10 else _digits,
@@ -107,8 +119,8 @@ def record_seen_otp_code(code: str) -> None:
     OTP_CACHE_FILE.write_text("\n".join(seen) + "\n")
 
 
-def fetch_latest_security_code(wait_seconds: int = 40) -> Optional[str]:
-    """Scans Gmail IMAP for a fresh, un-used security code from Greenhouse received recently."""
+def fetch_latest_security_code(wait_seconds: int = 50) -> Optional[str]:
+    """Scans Gmail IMAP for a fresh, un-used security code from Greenhouse or Clinch/Toast received recently."""
     user = os.getenv("GMAIL_USER")
     pwd = (os.getenv("GMAIL_APP_PASSWORD") or "").replace(" ", "")
     if not user or not pwd:
@@ -121,40 +133,59 @@ def fetch_latest_security_code(wait_seconds: int = 40) -> Optional[str]:
         try:
             mail = imaplib.IMAP4_SSL("imap.gmail.com")
             mail.login(user, pwd)
-            mail.select('"[Gmail]/All Mail"')
-            status, data = mail.search(None, 'FROM "us.greenhouse-mail.io"')
-            if data[0]:
-                msg_ids = data[0].split()
-                for mid in reversed(msg_ids[-5:]):
-                    status, mdata = mail.fetch(mid, "(RFC822)")
-                    msg = email.message_from_bytes(mdata[0][1])
-                    
-                    # Verify message timestamp is fresh (within last 180s)
-                    date_hdr = msg.get("Date")
-                    if date_hdr:
-                        try:
-                            msg_time = email.utils.parsedate_to_datetime(date_hdr).timestamp()
-                            if time.time() - msg_time > 180:
-                                continue
-                        except Exception:
-                            pass
+            for folder in ['"[Gmail]/All Mail"', '"[Gmail]/Spam"']:
+                mail.select(folder)
+                status, data = mail.search(None, 'ALL')
+                if data[0]:
+                    msg_ids = data[0].split()
+                    for mid in reversed(msg_ids[-8:]):
+                        status, mdata = mail.fetch(mid, "(RFC822)")
+                        msg = email.message_from_bytes(mdata[0][1])
+                        
+                        # Verify message timestamp is fresh (within last 300s)
+                        date_hdr = msg.get("Date")
+                        if date_hdr:
+                            try:
+                                msg_time = email.utils.parsedate_to_datetime(date_hdr).timestamp()
+                                if time.time() - msg_time > 300:
+                                    continue
+                            except Exception:
+                                pass
 
-                    for part in msg.walk():
-                        if part.get_content_type() in ["text/html"]:
-                            body = part.get_payload(decode=True).decode("utf-8", errors="ignore")
-                            code = None
-                            m_h1 = re.findall(r'<h1[^>]*>\s*([A-Za-z0-9]{8})\s*</h1>', body)
-                            if m_h1:
-                                code = m_h1[0].strip()
-                            else:
-                                m_txt = re.findall(r'application:\s*\n+\s*([A-Za-z0-9]{8})', body)
-                                if m_txt:
-                                    code = m_txt[0].strip()
+                        subj = (msg.get("Subject") or "").lower()
+                        from_hdr = (msg.get("From") or "").lower()
+                        
+                        if not any(k in from_hdr for k in ["greenhouse", "clinchtalent", "toast"]) and not any(k in subj for k in ["security code", "verify your login", "validation code"]):
+                            continue
 
-                            if code and code not in seen_codes:
-                                record_seen_otp_code(code)
-                                mail.logout()
-                                return code
+                        for part in msg.walk():
+                            if part.get_content_type() in ["text/html", "text/plain"]:
+                                body = part.get_payload(decode=True).decode("utf-8", errors="ignore")
+                                code = None
+                                
+                                # 1. Greenhouse 8-char code
+                                m_h1 = re.findall(r'<h1[^>]*>\s*([A-Za-z0-9]{8})\s*</h1>', body)
+                                if m_h1:
+                                    code = m_h1[0].strip()
+                                else:
+                                    m_txt = re.findall(r'application:\s*\n+\s*([A-Za-z0-9]{8})', body)
+                                    if m_txt:
+                                        code = m_txt[0].strip()
+                                
+                                # 2. Toast / Clinch Talent 5-char code
+                                if not code:
+                                    m_toast = re.findall(r'website\.\s*\n+\s*([A-Za-z0-9]{4,8})\s*\n', body)
+                                    if m_toast:
+                                        code = m_toast[0].strip()
+                                    else:
+                                        m_toast2 = re.findall(r'validation code:\s*([A-Za-z0-9]{4,8})', body, re.IGNORECASE)
+                                        if m_toast2:
+                                            code = m_toast2[0].strip()
+
+                                if code and code not in seen_codes:
+                                    record_seen_otp_code(code)
+                                    mail.logout()
+                                    return code
             mail.logout()
         except Exception:
             pass
@@ -162,33 +193,79 @@ def fetch_latest_security_code(wait_seconds: int = 40) -> Optional[str]:
     return None
 
 
+def smart_human_type(locator, value: str, field_name: str, target: Union[Page, Frame] = None, delay_range=(25, 45)) -> bool:
+    """Non-destructively inspects field first.
+    If already accurately populated by background resume parser, logs and skips cleanly.
+    Otherwise, scrolls, clicks, and human-types with natural keystroke cadence and Tab transition."""
+    if locator.count() == 0:
+        return False
+    try:
+        el = locator.first
+        if not el.is_visible() or not el.is_editable():
+            return False
+
+        curr_val = (el.input_value() or "").strip()
+        val_clean = str(value).strip()
+
+        # If already accurately parsed from resume, leave it untouched
+        if curr_val.lower() == val_clean.lower() or (val_clean.lower() in curr_val.lower() and len(curr_val) < len(val_clean) + 4):
+            print(f"            [Smart Skip] {field_name} already correctly populated ('{curr_val}')")
+            return True
+
+        el.scroll_into_view_if_needed()
+        el.click()
+        time.sleep(random.uniform(0.12, 0.25))
+
+        # If there is an existing partial/mismatched value, clear cleanly
+        if curr_val:
+            el.fill("")
+            time.sleep(0.08)
+
+        # Human typing cadence
+        keystroke_delay = random.randint(*delay_range)
+        el.press_sequentially(val_clean, delay=keystroke_delay)
+
+        main_page = target.page if hasattr(target, "page") and target.page else (target if hasattr(target, "keyboard") else None)
+        if main_page and hasattr(main_page, "keyboard"):
+            main_page.keyboard.press("Tab")
+        time.sleep(random.uniform(0.3, 0.6))
+        print(f"            [Human Typed] {field_name}: '{val_clean}'")
+        return True
+    except Exception:
+        return False
+
+
 def fill_greenhouse_application(target: Union[Page, Frame], resume_path: Path, company: str, job_title: str) -> None:
     """Fills Greenhouse ATS application forms with full React-Select, multi-pass EEO, and autocomplete support."""
+    main_page = target.page if hasattr(target, "page") and target.page else target
     print("      [1/6] Attaching resume...")
     file_inputs = target.locator('input[type="file"]')
     if file_inputs.count() > 0 and resume_path.exists():
         try:
-            file_inputs.first.set_input_files(str(resume_path))
-            time.sleep(2)
-            print(f"            Attached resume: {resume_path.name}")
+            p_obj = target if hasattr(target, "expect_response") else main_page
+            try:
+                with p_obj.expect_response(lambda r: "amazonaws.com" in r.url and r.status == 201, timeout=8000):
+                    file_inputs.first.set_input_files(str(resume_path))
+                print(f"            Attached resume and verified S3 upload: {resume_path.name}")
+            except Exception:
+                file_inputs.first.set_input_files(str(resume_path))
+                time.sleep(3)
+                print(f"            Attached resume: {resume_path.name}")
         except Exception as e:
             print(f"            Resume upload note: {e}")
 
-    print("      [2/6] Filling text and contact fields...")
-    for fn in target.locator('input[id*="first_name" i], input[name*="first_name" i]').all():
-        if fn.is_visible():
-            fn.fill(CANDIDATE["first_name"])
-            break
+    print("      [2/6] Inspecting & reconciling text contact fields (human cadence)...")
+    fn_loc = target.locator('input[id*="first" i], input[name*="first" i], input[placeholder*="first" i], input[aria-label*="first" i]').first
+    smart_human_type(fn_loc, CANDIDATE["first_name"], "First Name", target)
 
-    for ln in target.locator('input[id*="last_name" i], input[name*="last_name" i]').all():
-        if ln.is_visible():
-            ln.fill(CANDIDATE["last_name"])
-            break
+    ln_loc = target.locator('input[id*="last" i], input[name*="last" i], input[placeholder*="last" i], input[aria-label*="last" i]').first
+    smart_human_type(ln_loc, CANDIDATE["last_name"], "Last Name", target)
 
-    for em in target.locator('input[id*="email" i], input[name*="email" i]').all():
-        if em.is_visible():
-            em.fill(CANDIDATE["email"])
-            break
+    ffn_loc = target.locator('input[id*="full_name" i], input[name*="full_name" i], input[id*="fullname" i], input[name*="fullname" i], input[placeholder*="full name" i]').first
+    smart_human_type(ffn_loc, CANDIDATE["name"], "Full Name", target)
+
+    em_loc = target.locator('input[id*="email" i], input[name*="email" i], input[type="email"], input[placeholder*="email" i]').first
+    smart_human_type(em_loc, CANDIDATE["email"], "Email", target)
 
     # Phone Country Code -> India (+91)
     country_ctrl = target.locator('#country').locator('xpath=ancestor::*[contains(@class, "select__control")]').first
@@ -207,10 +284,15 @@ def fill_greenhouse_application(target: Union[Page, Frame], resume_path: Path, c
             print(f"            Phone country note: {e}")
 
     # Candidate Phone Number
-    for ph in target.locator('input[id*="phone" i], input[name*="phone" i]').all():
+    for ph in target.locator('input[id*="phone" i], input[name*="phone" i], input[type="tel"], input[placeholder*="phone" i]').all():
         if ph.is_visible():
-            ph.fill(CANDIDATE["phone_digits"])
-            print(f"            Filled Phone: {CANDIDATE['phone_digits']}")
+            is_iti = "iti" in (ph.get_attribute("class") or "") or ph.get_attribute("type") == "tel" or ph.get_attribute("data-intl-tel-input-id") is not None
+            val = CANDIDATE["phone"] if is_iti else CANDIDATE["phone_digits"]
+            curr_p = (ph.input_value() or "").strip()
+            if curr_p and (curr_p == val or CANDIDATE["phone_digits"] in curr_p):
+                print(f"            [Smart Skip] Phone already correctly populated ('{curr_p}')")
+            else:
+                smart_human_type(ph, val, "Phone", target)
             break
 
     # Location Autocomplete
@@ -235,64 +317,251 @@ def fill_greenhouse_application(target: Union[Page, Frame], resume_path: Path, c
 
     # Other text fields (LinkedIn, Preferred Name, adjustments, CTC, notice period, dates)
     for inp in target.locator('input[type="text"], input[type="number"], input:not([type])').all():
-        if not inp.is_visible() or inp.input_value():
-            continue
-        cls = inp.get_attribute("class") or ""
-        if "select__input" in cls:
-            continue
-        inp_id = (inp.get_attribute("id") or "").lower()
-        lbl = inp.evaluate('''e => {
-            let id = e.id;
-            let l = id ? document.querySelector(`label[for="${id}"]`) : null;
-            let p = e.closest("div");
-            return ((l ? l.innerText : "") + " " + (p ? p.innerText : "")).toLowerCase();
-        }''')
-        if "linkedin" in lbl:
-            inp.fill(CANDIDATE["linkedin"])
-        elif "start" in lbl and "year" in lbl or "start-date-year" in inp_id:
-            inp.fill("2021")
-        elif "end" in lbl and "year" in lbl or "end-date-year" in inp_id:
-            inp.fill("2026")
-        elif "prefer" in lbl and "name" in lbl:
-            inp.fill(CANDIDATE["first_name"])
-        elif "adjustment" in lbl or "inclusive" in lbl or "accessible" in lbl:
-            inp.fill("None required. Thank you.")
-        elif "company" in lbl or "employer" in lbl or "company-name" in inp_id:
-            inp.fill(CANDIDATE["current_company"])
-        elif "title" in lbl or "designation" in lbl:
-            inp.fill(CANDIDATE["current_title"])
-        elif "notice" in lbl or "available" in lbl or "availability" in lbl:
-            inp.fill("30 days")
-        elif "city" in lbl or "location" in lbl:
-            inp.fill("Bengaluru")
-        elif "expected" in lbl and ("ctc" in lbl or "salary" in lbl or "compensation" in lbl):
-            if inp.get_attribute("type") == "number":
-                inp.fill("5500000")
+        try:
+            if not inp.is_visible() or not inp.is_editable() or inp.input_value() or inp.get_attribute("readonly"):
+                continue
+            cls = inp.get_attribute("class") or ""
+            if "select__input" in cls:
+                continue
+            inp_id = (inp.get_attribute("id") or "").lower()
+            inp_name = (inp.get_attribute("name") or "").lower()
+            inp_ph = (inp.get_attribute("placeholder") or "").lower()
+            inp_type = (inp.get_attribute("type") or "").lower()
+            lbl_text = inp.evaluate('''e => {
+                let id = e.id;
+                let l = id ? document.querySelector(`label[for="${id}"]`) : null;
+                let container = e.closest(".chakra-form-control") || e.closest(".form-group") || e.closest("fieldset") || e.closest("div[class*='form']") || e.parentElement;
+                let p = e.closest("div");
+                return ((l ? l.innerText : "") + " " + (container ? container.innerText : "") + " " + (p ? p.innerText : "")).toLowerCase();
+            }''')
+            lbl = f"{inp_id} {inp_name} {inp_ph} {lbl_text}".lower()
+
+            if "linkedin" in lbl:
+                inp.fill(CANDIDATE["linkedin"], timeout=3000)
+            elif "start" in lbl and "year" in lbl or "start-date-year" in inp_id:
+                inp.fill("2021", timeout=3000)
+            elif "end" in lbl and "year" in lbl or "end-date-year" in inp_id:
+                inp.fill("2026", timeout=3000)
+            elif "prefer" in lbl and "name" in lbl:
+                inp.fill(CANDIDATE["first_name"], timeout=3000)
+            elif "adjustment" in lbl or "inclusive" in lbl or "accessible" in lbl:
+                inp.fill("None required. Thank you.", timeout=3000)
+            elif "company" in lbl or "employer" in lbl or "company-name" in inp_id:
+                inp.fill(CANDIDATE["current_company"], timeout=3000)
+            elif "title" in lbl or "designation" in lbl:
+                inp.fill(CANDIDATE["current_title"], timeout=3000)
+            elif any(k in lbl for k in ["address line 1", "street address", "address_1", "address 1", "addressline1"]):
+                inp.fill("Indiranagar, 100 Feet Road", timeout=3000)
+            elif any(k in lbl for k in ["address line 2", "address 2", "addressline2"]):
+                inp.fill("Suite 401", timeout=3000)
+            elif any(k in lbl for k in ["postal", "zip", "pincode", "pin code", "zipcode"]):
+                inp.fill("560038", timeout=3000)
+            elif any(k in lbl for k in ["province", "state", "region"]):
+                inp.fill("Karnataka", timeout=3000)
+            elif any(k in lbl for k in ["city", "town"]):
+                inp.fill("Bengaluru", timeout=3000)
+            elif "country" in lbl and "code" not in lbl:
+                inp.fill("India", timeout=3000)
+            elif "address" in lbl:
+                inp.fill("Bengaluru, Karnataka, India", timeout=3000)
+                time.sleep(0.5)
+                if hasattr(main_page, "keyboard"):
+                    main_page.keyboard.press("ArrowDown")
+                    time.sleep(0.2)
+                    main_page.keyboard.press("Enter")
+            elif "notice" in lbl or "available" in lbl or "availability" in lbl:
+                if inp_type == "number" or inp.get_attribute("inputmode") == "numeric":
+                    inp.fill("30", timeout=3000)
+                elif "month" in lbl:
+                    inp.fill("1", timeout=3000)
+                else:
+                    inp.fill("30", timeout=3000)
+            elif "city" in lbl or "location" in lbl:
+                inp.fill("Bengaluru", timeout=3000)
+            elif "expected" in lbl and ("ctc" in lbl or "salary" in lbl or "compensation" in lbl):
+                inp.fill(resolve_salary(lbl, is_numeric_input=(inp_type == "number"), is_current_override=False), timeout=3000)
+            elif "current" in lbl and ("ctc" in lbl or "salary" in lbl or "compensation" in lbl):
+                inp.fill(resolve_salary(lbl, is_numeric_input=(inp_type == "number"), is_current_override=True), timeout=3000)
+            elif "ctc" in lbl or "salary" in lbl or "compensation" in lbl or "fixed" in lbl or "remuneration" in lbl:
+                inp.fill(resolve_salary(lbl, is_numeric_input=(inp_type == "number")), timeout=3000)
+            elif "experience" in lbl or "exp" in lbl or "years" in lbl:
+                inp.fill("9", timeout=3000)
+            elif "local" in lbl and "given" in lbl:
+                inp.fill(CANDIDATE["first_name"], timeout=3000)
+            elif "local" in lbl and ("family" in lbl or "last" in lbl or "surname" in lbl):
+                inp.fill(CANDIDATE["last_name"], timeout=3000)
+            elif "github" in lbl:
+                pass  # Do NOT fill GitHub with LinkedIn
+            elif "website" in lbl or "portfolio" in lbl:
+                inp.fill(CANDIDATE["linkedin"], timeout=3000)
+            elif any(k in lbl for k in ["based in", "currently based", "hybrid", "bangalore", "bengaluru", "onsite", "office", "comfortable working", "willing to"]):
+                inp.fill("Yes", timeout=3000)
+            elif inp_type == "number" or inp.get_attribute("inputmode") == "numeric":
+                if any(k in lbl for k in ["notice", "days", "period", "joining"]):
+                    inp.fill("30", timeout=3000)
+                elif any(k in lbl for k in ["salary", "ctc", "comp", "pay"]):
+                    inp.fill("5500000", timeout=3000)
+                else:
+                    inp.fill("9", timeout=3000)
             else:
-                inp.fill("55 LPA (Flexible)")
-        elif "current" in lbl and ("ctc" in lbl or "salary" in lbl or "compensation" in lbl):
-            if inp.get_attribute("type") == "number":
-                inp.fill("4000000")
-            else:
-                inp.fill("40 LPA")
-        elif "ctc" in lbl or "salary" in lbl or "compensation" in lbl or "fixed" in lbl:
-            if inp.get_attribute("type") == "number":
-                inp.fill("5500000")
-            else:
-                inp.fill("55 LPA")
-        elif "experience" in lbl or "exp" in lbl:
-            inp.fill(CANDIDATE["total_years_exp"])
-        elif "website" in lbl or "url" in lbl or "portfolio" in lbl:
-            inp.fill(CANDIDATE["linkedin"])
-        else:
-            inp.fill("N/A")
+                pass  # Do not blindly fill N/A
+        except Exception:
+            pass
+
+    print("      [2.5/6] Selecting radio buttons (screening questions)...")
+    try:
+        radios = target.locator('input[type="radio"]').all()
+        radio_names = set()
+        for r in radios:
+            r_n = r.get_attribute("name")
+            if r_n:
+                radio_names.add(r_n)
+
+        for r_n in radio_names:
+            r_group = target.locator(f'input[type="radio"][name="{r_n}"]').all()
+            if not r_group:
+                continue
+            if any(r.is_checked() for r in r_group):
+                continue
+            first_r = r_group[0]
+            q_context = first_r.evaluate('''e => {
+                let container = e.closest("fieldset") || e.closest(".chakra-form-control") || e.closest(".form-group") || e.closest("div[class*='question']") || e.closest("div");
+                return container ? container.innerText.toLowerCase() : "";
+            }''')
+            is_negative = any(k in q_context for k in [
+                "previously worked", "former employee", "currently work here",
+                "relative", "conflict", "sponsorship", "require sponsorship",
+                "require visa", "felony", "criminal", "non-compete"
+            ])
+            target_val = "no" if is_negative else "yes"
+
+            picked_radio = None
+            for r in r_group:
+                r_val = (r.get_attribute("value") or "").lower()
+                r_lbl = r.evaluate('''e => {
+                    let id = e.id;
+                    let l = id ? document.querySelector(`label[for="${id}"]`) : null;
+                    let p = e.closest("label") || e.parentElement;
+                    return ((l ? l.innerText : "") + " " + (p ? p.innerText : "")).toLowerCase();
+                }''')
+                is_match = False
+                if target_val == "yes":
+                    is_match = r_val in ["y", "yes", "1", "true"] or "yes" in r_lbl or "y" == r_lbl.strip()
+                else:
+                    is_match = r_val in ["n", "no", "0", "false"] or "no" in r_lbl or "n" == r_lbl.strip()
+
+                if is_match:
+                    picked_radio = r
+                    break
+            if not picked_radio:
+                fallback_idx = 1 if is_negative and len(r_group) > 1 else 0
+                picked_radio = r_group[fallback_idx]
+
+            # Trigger click on parent label or control to satisfy Chakra UI/React synthetic events
+            try:
+                clicked = picked_radio.evaluate('''e => {
+                    let p = e.closest("label") || e.closest(".chakra-radio") || e.parentElement;
+                    if (p) {
+                        p.click();
+                        return true;
+                    }
+                    e.checked = true;
+                    e.dispatchEvent(new Event("change", { bubbles: true }));
+                    return true;
+                }''')
+                if not clicked:
+                    picked_radio.check(force=True)
+            except Exception:
+                try:
+                    picked_radio.check(force=True)
+                except Exception:
+                    pass
+
+        for r_lbl in target.locator('label.chakra-radio, label[class*="radio"]').all():
+            try:
+                if not r_lbl.is_visible():
+                    continue
+                inp_child = r_lbl.locator('input[type="radio"]').first
+                if inp_child.count() > 0 and inp_child.is_checked():
+                    continue
+                lbl_text = r_lbl.inner_text().strip().lower()
+                parent_context = r_lbl.evaluate('''e => {
+                    let p = e.closest(".chakra-form-control") || e.closest("fieldset") || e.closest("div");
+                    return p ? p.innerText.toLowerCase() : "";
+                }''')
+                is_negative = any(k in parent_context for k in [
+                    "previously worked", "former employee", "relative",
+                    "conflict", "sponsorship", "require visa"
+                ])
+                target_lbl = "no" if is_negative else "yes"
+                if target_lbl == lbl_text or (target_lbl in lbl_text and len(lbl_text) <= 5):
+                    r_lbl.click(force=True)
+                    time.sleep(0.2)
+            except Exception:
+                pass
+    except Exception as e:
+        print(f"      [Radio Notice]: {e}")
 
     print("      [3/6] Populating React-Select controls (multi-pass for dynamic EEO)...")
-    for p_round in range(3):
+    # Fast sequential pass on input.select__input elements
+    for inp in target.locator('input.select__input').all():
+        try:
+            ctrl = inp.locator('xpath=ancestor::*[contains(@class, "select__control")]').first
+            if ctrl.count() > 0:
+                current_val = ctrl.inner_text().strip()
+                if current_val and current_val not in ["Select..."] and not current_val.startswith("Select"):
+                    continue
+            p_txt = inp.evaluate('e => { let p = e.closest(".select__container") || e.closest(".field") || e.parentElement; return p ? p.innerText : ""; }').lower()
+            if not p_txt:
+                continue
+
+            ans = None
+            if "country" in p_txt and any(k in p_txt for k in ["phone", "code", "dial"]):
+                ans = "+91"
+            elif "country" in p_txt and not any(k in p_txt for k in ["right to work", "authorized"]):
+                ans = "India"
+            elif any(k in p_txt for k in ["city", "location"]):
+                ans = "Bengaluru"
+            elif any(k in p_txt for k in ["hybrid", "onsite", "office", "hyderabad", "bangalore", "bengaluru", "relocate", "relocation", "comply"]):
+                ans = "Yes"
+            elif any(k in p_txt for k in ["authorized", "legally", "eligible", "right to work"]):
+                ans = "Yes"
+            elif any(k in p_txt for k in ["sponsorship", "visa", "require sponsorship", "need sponsorship"]):
+                ans = "No"
+            elif any(k in p_txt for k in ["privacy", "policy"]):
+                ans = "Yes"
+            elif any(k in p_txt for k in ["acknowledge", "declaration", "consent", "confirm", "certify"]):
+                ans = "Acknowledge"
+            elif any(k in p_txt for k in ["gender", "sex"]):
+                ans = "Male"
+            elif any(k in p_txt for k in ["veteran", "disability", "previously worked", "consultant", "contractor", "former employee", "relative"]):
+                ans = "No"
+            elif any(k in p_txt for k in ["hear about", "source"]):
+                ans = "LinkedIn"
+            elif any(k in p_txt for k in ["race", "ethnicity"]):
+                ans = "Asian"
+            elif any(k in p_txt for k in ["school", "university"]):
+                ans = "National Institute of Technology"
+            elif any(k in p_txt for k in ["degree", "education"]):
+                ans = "Bachelor"
+            elif any(k in p_txt for k in ["discipline"]):
+                ans = "Engineering"
+
+            if ans:
+                inp.focus()
+                inp.press_sequentially(ans, delay=30)
+                time.sleep(0.3)
+                if hasattr(main_page, "keyboard"):
+                    main_page.keyboard.press("Enter")
+                time.sleep(0.2)
+        except Exception:
+            pass
+
+    for p_round in range(2):
         unfilled_controls = []
         for ctrl in target.locator('.select__control').all():
             val = ctrl.inner_text().strip()
-            if val in ["", "Select..."] or val.startswith("Select"):
+            if val in ["", "Select..."] or val.startswith("Select") or any(k in val.lower() for k in ["select", "acknowledge"]):
                 unfilled_controls.append(ctrl)
 
         if not unfilled_controls:
@@ -308,7 +577,10 @@ def fill_greenhouse_application(target: Union[Page, Frame], resume_path: Path, c
                     }
                     return p ? p.innerText.toLowerCase() : "";
                 }''')
-                ctrl.click()
+                try:
+                    ctrl.click(timeout=1500)
+                except Exception:
+                    continue
                 time.sleep(0.3)
                 opts = target.locator('.select__option').all()
                 if not opts:
@@ -329,18 +601,32 @@ def fill_greenhouse_application(target: Union[Page, Frame], resume_path: Path, c
                     chosen = next((o for o in opts if o.inner_text().lower().strip() == "indian" or o.inner_text().lower().strip() == "india"), None)
                 elif "phone" in parent_text and "country" in parent_text:
                     chosen = next((o for o in opts if "+91" in o.inner_text() or (o.inner_text().lower().startswith("india") and "+91" in o.inner_text())), None)
+                elif any(k in parent_text for k in ["authorized to work", "legally authorized", "eligible to work", "work authorization", "authorized in the location"]):
+                    chosen = next((o for o in opts if any(k in o.inner_text().lower() for k in ["will not require", "do not require", "authorized without", "citizen", "yes -", "yes,"]) and not any(k in o.inner_text().lower() for k in ["not authorized", "no - i will require", "no, i will require"])), None)
+                    if not chosen:
+                        chosen = next((o for o in opts if any(k in o.inner_text().lower() for k in ["yes", "authorized"]) and not any(k in o.inner_text().lower() for k in ["no", "not authorized", "will require"])), None)
+                    if not chosen:
+                        chosen = next((o for o in opts if o.inner_text().strip().lower().startswith("yes")), None)
                 elif any(k in parent_text for k in ["sponsorship", "require a work permit", "require visa", "require sponsorship", "need sponsorship", "additional right to work support", "sponsor"]):
-                    chosen = next((o for o in opts if any(k in o.inner_text().lower() for k in ["no", "not require", "do not", "never"]) and not any(k in o.inner_text().lower() for k in ["yes", "require sponsorship"])), None)
+                    chosen = next((o for o in opts if any(k in o.inner_text().lower() for k in ["will not require", "do not require", "not require sponsorship", "no sponsorship", "authorized without sponsorship", "citizen"])), None)
+                    if not chosen:
+                        chosen = next((o for o in opts if any(k in o.inner_text().lower() for k in ["no", "not require", "do not", "never"]) and not any(k in o.inner_text().lower() for k in ["yes", "will require", "require sponsorship", "need sponsorship"])), None)
+                    if not chosen:
+                        chosen = next((o for o in opts if o.inner_text().strip().lower() in ["no", "no, i do not", "no, i will not"]), None)
+                elif any(k in parent_text for k in ["hybrid", "in office", "in-office", "onsite", "on-site", "relocate", "relocation", "commute", "office model"]):
+                    chosen = next((o for o in opts if any(k in o.inner_text().lower() for k in ["yes", "comfortable", "open to", "agree", "willing"]) and not any(k in o.inner_text().lower() for k in ["no - i am only", "only seeking 100% remote", "not comfortable", "no,"])), None)
+                    if not chosen:
+                        chosen = next((o for o in opts if o.inner_text().strip().lower().startswith("yes")), None)
+                elif any(k in parent_text for k in ["currently work here", "previously worked here", "previously worked at", "employed by", "worked at", "former employee", "current employee", "have you worked here", "previously been employed by"]):
+                    chosen = next((o for o in opts if any(k in o.inner_text().lower() for k in ["never worked", "no, i have never", "no, i do not", "no", "external applicant", "none"])), None)
                     if not chosen:
                         chosen = next((o for o in opts if o.inner_text().strip().lower().startswith("no")), None)
-                elif any(k in parent_text for k in ["legal right to work", "authorized to work", "eligible to work", "legally authorized", "authorized in the location", "work authorization"]) and not any(k in parent_text for k in ["sponsor", "require"]):
-                    chosen = next((o for o in opts if any(k in o.inner_text().lower() for k in ["yes", "authorized"]) and not any(k in o.inner_text().lower() for k in ["no", "not authorized"])), None)
-                elif any(k in parent_text for k in ["currently work", "previously worked", "employed by", "worked at", "former employee", "current employee", "have you worked", "previously been employed", "employee"]):
-                    chosen = next((o for o in opts if any(k in o.inner_text().lower() for k in ["never worked", "no, i have never", "no, i do not", "no", "external applicant"])), None)
                     if not chosen:
-                        chosen = next((o for o in opts if o.inner_text().strip().lower() == "no"), None)
-                elif any(k in parent_text for k in ["procurement", "contract award", "government employee", "government official", "conflict of interest", "non-compete", "restriction", "relative", "family member", "outside business activity", "referred to this position"]):
-                    chosen = next((o for o in opts if o.inner_text().strip().lower() in ["no", "no, i have not", "none", "no, i do not"]), None)
+                        chosen = next((o for o in opts if "no" in o.inner_text().strip().lower()), None)
+                elif any(k in parent_text for k in ["procurement", "contract award", "government employee", "government official", "conflict of interest", "non-compete", "restriction", "relative", "family member", "outside business activity", "referred to this position", "nepotism"]):
+                    chosen = next((o for o in opts if any(k in o.inner_text().lower() for k in ["no", "no, i have not", "none", "no, i do not", "not applicable"])), None)
+                    if not chosen:
+                        chosen = next((o for o in opts if o.inner_text().strip().lower().startswith("no")), None)
                 elif any(k in parent_text for k in ["18 years", "at least 18"]):
                     chosen = next((o for o in opts if o.inner_text().strip().lower() in ["yes", "yes, i am at least 18"]), None)
                 elif any(k in parent_text for k in ["salary range", "accept the listed salary"]):
@@ -359,7 +645,13 @@ def fill_greenhouse_application(target: Union[Page, Frame], resume_path: Path, c
                     chosen = next((o for o in opts if any(k in o.inner_text().lower() for k in ["june", "august", "06", "08"])), opts[0])
                 elif "end" in parent_text and "month" in parent_text:
                     chosen = next((o for o in opts if any(k in o.inner_text().lower() for k in ["may", "december", "05", "12"])), opts[-1])
-                elif any(k in parent_text for k in ["bachelor's degree", "years of software", "lead experience", "building and deploying", "orchestration", "rag systems", "backend engineering", "aws experience", "years of experience", "project manager", "5+ years", "experience being a"]):
+                elif any(k in parent_text for k in ["how many years", "years of experience", "experience with"]):
+                    chosen = next((o for o in opts if any(k in o.inner_text() for k in ["9–12", "9-12", "6–8", "6-8", "8+", "7+", "6+", "5+"])), None)
+                    if not chosen:
+                        chosen = next((o for o in opts if o.inner_text().strip().lower() in ["yes", "yes, i have", "yes, i do"]), None)
+                elif any(k in parent_text for k in ["architecture", "ownership", "gtm systems"]):
+                    chosen = next((o for o in opts if any(k in o.inner_text().lower() for k in ["led multi-region", "enterprise-wide", "owned architecture"])), opts[-1])
+                elif any(k in parent_text for k in ["bachelor's degree", "years of software", "lead experience", "building and deploying", "orchestration", "rag systems", "backend engineering", "aws experience", "project manager", "5+ years", "experience being a"]):
                     chosen = next((o for o in opts if o.inner_text().strip().lower() in ["yes", "yes, i have", "yes, i do"]), None)
                 elif "age range" in parent_text or "age" in parent_text:
                     chosen = next((o for o in opts if any(k in o.inner_text() for k in ["25–34", "25-34", "30-39", "25 - 34", "35–44", "35-44"])), None)
@@ -398,7 +690,11 @@ def fill_greenhouse_application(target: Union[Page, Frame], resume_path: Path, c
                     chosen = next((o for o in opts if o.inner_text().strip().lower() in ["male", "man", "cisgender man", "cisgender male", "he/him"] or o.inner_text().strip() in ["Male", "Man"]), None)
                 elif "country" in parent_text or "located" in parent_text or "reside" in parent_text:
                     chosen = next((o for o in opts if o.inner_text().strip().lower() in ["india", "india (+91)"]), None)
-                elif any(k in parent_text for k in ["agreement", "restriction", "sponsorship", "visa"]):
+                elif any(k in parent_text for k in ["privacy policy", "privacy notice", "policy", "terms", "read and understood", "plagiarism", "original", "consent", "confirm", "certify", "processing of personal data"]):
+                    chosen = next((o for o in opts if any(k in o.inner_text().lower() for k in ["yes", "acknowledge", "agree", "consent", "i agree", "i understand"])), None)
+                    if not chosen:
+                        chosen = opts[0]
+                elif any(k in parent_text for k in ["restriction", "sponsorship", "visa", "non-compete"]):
                     chosen = next((o for o in opts if o.inner_text().strip() == "No"), None)
                 elif "authorized" in parent_text or "eligible" in parent_text:
                     chosen = next((o for o in opts if o.inner_text().strip() == "Yes"), None)
@@ -406,12 +702,18 @@ def fill_greenhouse_application(target: Union[Page, Frame], resume_path: Path, c
                     chosen = next((o for o in opts if "linkedin" in o.inner_text().lower() or "website" in o.inner_text().lower()), None)
                 elif any(k in parent_text for k in ["alerts", "updates", "stay up to date", "marketing"]):
                     chosen = next((o for o in opts if o.inner_text().strip() == "No"), None)
-                elif any(k in parent_text for k in ["plagiarism", "original", "agree", "consent", "confirm", "certify", "processing of personal data", "privacy notice"]):
-                    chosen = next((o for o in opts if any(k in o.inner_text().lower() for k in ["yes", "acknowledge", "agree", "consent"])), None)
 
                 if chosen:
                     chosen_val = chosen.inner_text().strip()
-                    chosen.click()
+                    try:
+                        chosen.evaluate("e => e.click()")
+                    except Exception:
+                        try:
+                            chosen.click(force=True, timeout=1000)
+                        except Exception:
+                            pass
+                    if hasattr(main_page, "keyboard"):
+                        main_page.keyboard.press("Enter")
                     print(f"            Selected [{chosen_val}] for: {parent_text[:35].replace(chr(10), ' ')}")
                 else:
                     # Safe fallback: avoid accidentally picking 'Yes' for veteran, disability, employee, or conflict
@@ -421,11 +723,57 @@ def fill_greenhouse_application(target: Union[Page, Frame], resume_path: Path, c
                     else:
                         fallback_opt = opts[0]
                     first_val = fallback_opt.inner_text().strip()
-                    fallback_opt.click()
+                    try:
+                        fallback_opt.evaluate("e => e.click()")
+                    except Exception:
+                        try:
+                            fallback_opt.click(force=True, timeout=1000)
+                        except Exception:
+                            pass
+                    if hasattr(main_page, "keyboard"):
+                        main_page.keyboard.press("Enter")
                     print(f"            Fallback selected [{first_val}] for: {parent_text[:35].replace(chr(10), ' ')}")
-                time.sleep(0.4)
+                time.sleep(0.3)
             except Exception:
                 pass
+
+    print("      [3.5/6] Handling standard HTML select dropdowns...")
+    for sel in target.locator('select').all():
+        try:
+            if not sel.is_visible():
+                continue
+            s_text = sel.evaluate('''e => {
+                let id = e.id;
+                let l = id ? document.querySelector(`label[for="${id}"]`) : null;
+                let p = e.closest("div") || e.parentElement;
+                return ((l ? l.innerText : "") + " " + (p ? p.innerText : "")).toLowerCase();
+            }''')
+            if any(k in s_text for k in ["font", "opacity", "caption", "color", "style"]):
+                continue
+            opts = sel.locator('option').all()
+            if len(opts) <= 1:
+                continue
+            chosen_opt = None
+            if any(k in s_text for k in ["agree", "consent", "privacy", "terms", "understand", "policy"]):
+                chosen_opt = next((o for o in opts if any(k in o.inner_text().lower() for k in ["agree", "yes", "i agree", "accept"])), None)
+            elif any(k in s_text for k in ["sponsorship", "visa", "conflict", "felony", "criminal"]):
+                chosen_opt = next((o for o in opts if o.inner_text().strip().lower() in ["no", "no, i do not"]), None)
+            elif any(k in s_text for k in ["authorized", "eligible", "18 years"]):
+                chosen_opt = next((o for o in opts if o.inner_text().strip().lower() in ["yes", "yes, i am"]), None)
+            elif any(k in s_text for k in ["gender", "sex"]):
+                chosen_opt = next((o for o in opts if o.inner_text().strip().lower() in ["male", "man"]), None)
+            elif any(k in s_text for k in ["hear about", "source"]):
+                chosen_opt = next((o for o in opts if any(k in o.inner_text().lower() for k in ["linkedin", "website"])), None)
+            
+            if not chosen_opt:
+                chosen_opt = next((o for o in opts if o.get_attribute("value")), opts[-1])
+
+            if chosen_opt:
+                val = chosen_opt.get_attribute("value")
+                sel.select_option(value=val)
+                print(f"            Selected [{chosen_opt.inner_text().strip()}] for HTML select: {s_text[:35].replace(chr(10), ' ')}")
+        except Exception:
+            pass
 
     print("      [4/6] Answering custom screening questions (textareas)...")
     context_notes = load_default_context_notes()
@@ -475,54 +823,35 @@ def fill_ashby_application(page: Page, resume_path: Path, company: str, job_titl
             time.sleep(1)
         time.sleep(2)
 
-    # Check for secondary file inputs (e.g. Website/Portfolio attachment, cover letter)
+    # Check for secondary file inputs (e.g. Cover letter if explicitly required)
     all_files = page.locator('input[type="file"]').all()
     if len(all_files) > 1 and resume_path.exists():
         for f_idx, extra_f in enumerate(all_files[1:], start=1):
             try:
-                parent_text = extra_f.evaluate('el => el.closest("div")?.innerText || ""')
-                if not any(k in parent_text.lower() for k in ["replace", "v6_operations", ".pdf"]):
+                parent_text = extra_f.evaluate('el => el.closest("div")?.innerText || ""').lower()
+                is_req = extra_f.get_attribute("required") is not None or "required" in parent_text
+                if is_req and not any(k in parent_text for k in ["replace", "v6_operations", ".pdf"]):
                     extra_f.set_input_files(str(resume_path))
-                    print(f"            Uploaded document to secondary file input #{f_idx}")
+                    print(f"            Uploaded document to required secondary file input #{f_idx}")
                     time.sleep(1.0)
             except Exception:
                 pass
 
-    print("      [2/5] Filling Ashby basic details...")
-    name_inp = page.locator('input[name="_systemfield_name"], input[id*="name" i]').first
-    if name_inp.count() > 0:
-        name_inp.click()
-        name_inp.fill(CANDIDATE["full_name"])
-        page.keyboard.press("Tab")
-        time.sleep(0.3)
+    print("      [2/5] Inspecting & reconciling Ashby basic details (human cadence)...")
+    name_inp = page.locator('input[name="_systemfield_name"]').first
+    smart_human_type(name_inp, CANDIDATE["full_name"], "Full Name", page)
 
     first_name_inp = page.locator('input[name*="firstName" i], input[id*="firstName" i]').first
-    if first_name_inp.count() > 0 and not first_name_inp.input_value():
-        first_name_inp.click()
-        first_name_inp.fill(CANDIDATE["first_name"])
-        page.keyboard.press("Tab")
-        time.sleep(0.3)
+    smart_human_type(first_name_inp, CANDIDATE["first_name"], "First Name", page)
 
     last_name_inp = page.locator('input[name*="lastName" i], input[id*="lastName" i]').first
-    if last_name_inp.count() > 0 and not last_name_inp.input_value():
-        last_name_inp.click()
-        last_name_inp.fill(CANDIDATE["last_name"])
-        page.keyboard.press("Tab")
-        time.sleep(0.3)
+    smart_human_type(last_name_inp, CANDIDATE["last_name"], "Last Name", page)
 
     email_inp = page.locator('input[name="_systemfield_email"], input[id*="email" i], input[type="email"]').first
-    if email_inp.count() > 0:
-        email_inp.click()
-        email_inp.fill(CANDIDATE["email"])
-        page.keyboard.press("Tab")
-        time.sleep(0.3)
+    smart_human_type(email_inp, CANDIDATE["email"], "Email", page)
 
     phone_inp = page.locator('input[name="_systemfield_phoneNumber"], input[type="tel"], input[name*="phone" i], input[id*="phone" i]').first
-    if phone_inp.count() > 0 and not phone_inp.input_value():
-        phone_inp.click()
-        phone_inp.fill(CANDIDATE["phone"])
-        page.keyboard.press("Tab")
-        time.sleep(0.3)
+    smart_human_type(phone_inp, CANDIDATE["phone"], "Phone", page)
 
     print("      [3/5] Setting Ashby location autocomplete...")
     for loc in page.locator('input.ashby-application-form-input-autocomplete').all():
@@ -564,7 +893,23 @@ def fill_ashby_application(page: Page, resume_path: Path, company: str, job_titl
                     time.sleep(0.2)
                     no_btn.click()
                     print(f"            Ashby Yes/No: Selected [No] for: {parent_text.split(chr(10))[0][:40]}")
-            elif any(k in parent_text for k in ["office", "in-person", "relocate", "authorized", "eligible", "18 years", "experience", "timezone", "legally authorised", "legally authorized", "minimum of", "foster city", "bay area", "open to reloc"]):
+            elif any(k in parent_text for k in ["currently work", "previously worked", "employed by", "worked at", "former employee", "current employee", "have you worked", "previously been employed", "prior employee", "worked with", "worked for", "employed with"]):
+                no_btn = yn.locator('button[data-option="no"]').first
+                if no_btn.count() > 0:
+                    no_btn.scroll_into_view_if_needed()
+                    no_btn.hover()
+                    time.sleep(0.2)
+                    no_btn.click()
+                    print(f"            Ashby Yes/No: Selected [No] for: {parent_text.split(chr(10))[0][:40]}")
+            elif any(k in parent_text for k in ["restriction", "conflict", "felony", "misconduct", "disciplinary", "criminal", "non-compete", "relative", "family member", "contractor previously"]):
+                no_btn = yn.locator('button[data-option="no"]').first
+                if no_btn.count() > 0:
+                    no_btn.scroll_into_view_if_needed()
+                    no_btn.hover()
+                    time.sleep(0.2)
+                    no_btn.click()
+                    print(f"            Ashby Yes/No: Selected [No] for: {parent_text.split(chr(10))[0][:40]}")
+            elif any(k in parent_text for k in ["office", "in-person", "relocate", "authorized", "eligible", "18 years", "experience", "timezone", "legally authorised", "legally authorized", "minimum of", "foster city", "bay area", "open to reloc", "fluent", "proficient", "skill", "sql", "python", "salesforce", "hubspot", "crm", "experience with"]):
                 yes_btn = yn.locator('button[data-option="yes"]').first
                 if yes_btn.count() > 0:
                     yes_btn.scroll_into_view_if_needed()
@@ -573,26 +918,33 @@ def fill_ashby_application(page: Page, resume_path: Path, company: str, job_titl
                     yes_btn.click()
                     print(f"            Ashby Yes/No: Selected [Yes] for: {parent_text.split(chr(10))[0][:40]}")
             else:
-                if any(k in parent_text for k in ["restriction", "conflict", "felony", "misconduct"]):
-                    no_btn = yn.locator('button[data-option="no"]').first
-                    if no_btn.count() > 0:
-                        no_btn.click()
-                else:
+                if any(k in parent_text for k in ["agree", "understand", "acknowledge", "consent", "confirm", "available", "willing", "excited"]):
                     yes_btn = yn.locator('button[data-option="yes"]').first
                     if yes_btn.count() > 0:
                         yes_btn.scroll_into_view_if_needed()
                         yes_btn.hover()
                         time.sleep(0.2)
                         yes_btn.click()
+                else:
+                    no_btn = yn.locator('button[data-option="no"]').first
+                    if no_btn.count() > 0:
+                        no_btn.scroll_into_view_if_needed()
+                        no_btn.hover()
+                        time.sleep(0.2)
+                        no_btn.click()
+                    else:
+                        yes_btn = yn.locator('button[data-option="yes"]').first
+                        if yes_btn.count() > 0:
+                            yes_btn.click()
             time.sleep(0.3)
         except Exception:
             pass
 
     # 4b. Field entries (inputs, textareas, file uploads)
     context_notes = load_default_context_notes()
-    for entry in page.locator('.ashby-application-form-field-entry').all():
+    for entry in page.locator('.ashby-application-form-field-entry, div[class*="fieldEntry"], div[class*="_fieldEntry_"], div[class*="FieldEntry"]').all():
         try:
-            lbl = entry.locator('label.ashby-application-form-question-title').first
+            lbl = entry.locator('label.ashby-application-form-question-title, label').first
             txt = lbl.inner_text().strip() if lbl.count() > 0 else entry.inner_text().strip().split('\n')[0]
             txt_l = txt.lower()
 
@@ -626,33 +978,35 @@ def fill_ashby_application(page: Page, resume_path: Path, company: str, job_titl
                     inp.fill(CANDIDATE.get("linkedin") or CANDIDATE.get("github"))
                 elif any(k in txt_l for k in ["phone", "mobile"]):
                     inp.fill(CANDIDATE["phone"])
+                elif any(k in txt_l for k in ["first name", "given name", "legal first", "preferred first", "preferred name"]):
+                    inp.fill(CANDIDATE["first_name"])
+                elif any(k in txt_l for k in ["last name", "family name", "surname", "legal last", "preferred last"]):
+                    inp.fill(CANDIDATE["last_name"])
+                elif any(k in txt_l for k in ["full name", "legal name", "legal first and last"]):
+                    inp.fill(CANDIDATE["full_name"])
+                elif any(k in txt_l for k in ["referred", "referral", "who referred"]):
+                    inp.fill("No")
+                elif any(k in txt_l for k in ["title", "designation", "role"]):
+                    inp.fill(CANDIDATE.get("current_title", "Lead - CRO Office"))
                 elif any(k in txt_l for k in ["employer", "company"]):
                     inp.fill(CANDIDATE["current_company"])
-                elif any(k in txt_l for k in ["school", "university"]):
-                    inp.fill(CANDIDATE["school"])
-                elif any(k in txt_l for k in ["pronoun"]):
-                    inp.fill("He/Him")
-                elif any(k in txt_l for k in ["preferred name", "preferred first", "preferred"]):
-                    inp.fill(CANDIDATE["first_name"])
-                elif any(k in txt_l for k in ["preferred last"]):
-                    inp.fill(CANDIDATE["last_name"])
-                elif any(k in txt_l for k in ["legal first and last", "full name"]):
-                    inp.fill(CANDIDATE["full_name"])
-                elif any(k in txt_l for k in ["country", "based in"]):
+                elif any(k in txt_l for k in ["country", "based in", "working from"]):
                     inp.fill(CANDIDATE.get("country", "India"))
-                elif any(k in txt_l for k in ["notice", "days"]):
-                    if inp_type == "number":
-                        inp.fill(CANDIDATE.get("notice_period", "30"))
+                elif any(k in txt_l for k in ["notice", "days", "availability"]):
+                    if "month" in txt_l:
+                        inp.fill("1")
                     else:
-                        inp.fill(f"{CANDIDATE.get('notice_period', '30')} days")
+                        inp.fill("30")
                 elif any(k in txt_l for k in ["salary", "compensation"]):
-                    if inp_type == "number":
-                        inp.fill("5000000")
-                    else:
-                        inp.fill(CANDIDATE.get("compensation", "Competitive / Flexible"))
+                    inp.fill(resolve_salary(txt_l, is_numeric_input=(inp_type == "number")))
                 elif any(k in txt_l for k in ["experience", "years"]) and inp_type == "number":
-                    inp.fill(CANDIDATE.get("total_years_exp", "5"))
-                elif any(k in txt_l for k in ["twitter", "x handle", "if other", "specify below"]):
+                    inp.fill("9")
+                elif any(k in txt_l for k in ["twitter", "x handle"]):
+                    tw_val = CANDIDATE.get("twitter") or "https://x.com"
+                    inp.fill(tw_val if inp_type == "url" else tw_val.split("/")[-1])
+                elif any(k in txt_l for k in ["how did you hear", "hear about", "source"]):
+                    inp.fill("LinkedIn / Company Careers")
+                elif any(k in txt_l for k in ["if other", "specify below"]):
                     inp.fill("N/A")
                 elif any(k in txt_l for k in ["portfolio", "url", "link", "website"]):
                     inp.fill(CANDIDATE.get("portfolio") or CANDIDATE.get("linkedin"))
@@ -666,6 +1020,64 @@ def fill_ashby_application(page: Page, resume_path: Path, company: str, job_titl
                 time.sleep(0.3)
                 print(f"            Filled Ashby input for: {txt[:40]}")
                 continue
+        except Exception:
+            pass
+
+    # Direct pass for all unfilled visible textareas
+    for ta in page.locator('textarea:not([name*="recaptcha"])').all():
+        try:
+            if ta.is_visible() and not ta.input_value():
+                q_txt = ta.evaluate('''e => {
+                    let p = e.closest("div[class*='field']") || e.closest("div") || e.parentElement;
+                    let l = e.id ? document.querySelector(`label[for="${e.id}"]`) : null;
+                    return (l ? l.innerText : (p ? p.innerText : e.placeholder || "")).trim().split('\\n')[0];
+                }''')
+                ans = answer_custom_question(q_txt, context_notes)
+                ta.fill(ans)
+                print(f"            Filled Ashby textarea (fallback) for: {q_txt[:40]}")
+        except Exception:
+            pass
+
+    # Direct pass for all unfilled visible text inputs
+    for inp in page.locator('input[type="text"], input[type="url"], input[type="tel"]').all():
+        try:
+            if inp.is_visible() and not inp.input_value():
+                q_txt = inp.evaluate('''e => {
+                    let p = e.closest("div[class*='field']") || e.closest("div") || e.parentElement;
+                    let l = e.id ? document.querySelector(`label[for="${e.id}"]`) : null;
+                    return (l ? l.innerText : (p ? p.innerText : e.placeholder || "")).trim().split('\\n')[0];
+                }''')
+                q_l = q_txt.lower()
+                if "linkedin" in q_l:
+                    inp.fill(CANDIDATE["linkedin"])
+                elif any(k in q_l for k in ["country", "working from"]):
+                    inp.fill("India")
+                elif any(k in q_l for k in ["referred", "referral"]):
+                    inp.fill("No")
+                elif any(k in q_l for k in ["notice", "days"]):
+                    inp.fill("30")
+                elif any(k in q_l for k in ["years", "experience"]) and len(q_l.split()) < 8:
+                    inp.fill("9")
+                else:
+                    ans = answer_custom_question(q_txt, context_notes)
+                    inp.fill(ans[:120])
+                print(f"            Filled Ashby input (fallback) for: {q_txt[:40]}")
+        except Exception:
+            pass
+
+    # Checkboxes pass
+    for cb in page.locator('input[type="checkbox"]').all():
+        try:
+            cb_label = cb.evaluate('e => (e.closest("label")?.innerText || e.closest("div")?.innerText || e.name || "").toLowerCase()')
+            if any(k in cb_label for k in ["sponsorship", "require visa", "visa support"]):
+                if cb.is_checked():
+                    cb.uncheck(force=True)
+            elif any(k in cb_label for k in [
+                "authorized to work", "legally authorized", "straight", "heterosexual",
+                "asian", "none of the above", "agree", "consent", "acknowledge", "terms"
+            ]):
+                if not cb.is_checked():
+                    cb.check(force=True)
         except Exception:
             pass
 
@@ -759,6 +1171,25 @@ def fill_ashby_application(page: Page, resume_path: Path, company: str, job_titl
                 if not chosen_tuple:
                     chosen_tuple = choices[0]
 
+            # Prior Employment / Current Employment / Relatives / Non-Compete / Conflicts / Misconduct
+            elif any(k in g_lower for k in [
+                "employed", "employee", "worked", "worked for", "worked at", "prior employment", 
+                "former", "currently work", "currently employed", "previously worked", "previously employed",
+                "relative", "family member", "family", "nepotism", "relation",
+                "conflict", "restriction", "non-compete", "non compete", "covenant", "nda",
+                "felony", "crime", "conviction", "disciplinary", "misconduct", "investigation",
+                "previously applied", "applied before", "prior application", "agency"
+            ]):
+                for c in choices:
+                    if any(no_word in c[2] for no_word in ["no", "never", "none", "not employed", "external", "do not have"]):
+                        chosen_tuple = c
+                        break
+                if not chosen_tuple:
+                    for c in choices:
+                        if c[2].startswith("no"):
+                            chosen_tuple = c
+                            break
+
             # Sponsorship / Visa
             elif any(k in g_lower for k in ["sponsor", "visa", "work permit", "ongoing support"]):
                 for c in choices:
@@ -815,16 +1246,23 @@ def fill_ashby_application(page: Page, resume_path: Path, company: str, job_titl
                         chosen_tuple = c
                         break
 
-            # Fallback
+            # Global Region / Location
+            elif any(k in g_lower for k in ["region", "global region", "located in", "based in"]):
+                for c in choices:
+                    if any(k in c[2] for k in ["apac", "asia", "india", "south asia", "asia pacific"]):
+                        chosen_tuple = c
+                        break
+
+            # Fallback: Prefer YES for consent/agreements/authorization, and NO for everything else
             if not chosen_tuple and choices:
-                if any(k in g_lower for k in ["conflict", "felony", "misconduct", "restriction", "non-compete", "employee", "previous", "previously", "referred", "work for", "worked at"]):
+                if any(k in g_lower for k in ["agree", "consent", "confirm", "certify", "acknowledge", "authorized", "eligible", "18", "permit", "right to work"]):
                     for c in choices:
-                        if c[2].startswith("no"):
+                        if c[2].startswith("yes") or "yes" in c[2]:
                             chosen_tuple = c
                             break
                 else:
                     for c in choices:
-                        if c[2].startswith("yes"):
+                        if c[2].startswith("no") or "no" in c[2]:
                             chosen_tuple = c
                             break
                 if not chosen_tuple:
@@ -883,9 +1321,10 @@ def fill_ashby_application(page: Page, resume_path: Path, company: str, job_titl
 def fill_lever_application(page: Page, resume_path: Path, company: str, job_title: str) -> None:
     """Fills Lever ATS application form with strict candidate details and EEO invariants."""
     print("      [1/5] Filling Lever basic details...")
-    name_inp = page.locator('input[name="name"]').first
-    if name_inp.count() > 0 and not name_inp.input_value():
+    name_inp = page.locator('input[name="name"], input[name="fullName"], input[name*="name"]').first
+    if name_inp.count() > 0 and (not name_inp.input_value() or not name_inp.input_value().strip()):
         name_inp.fill(CANDIDATE["full_name"])
+        print(f"            Filled Lever Name: {CANDIDATE['full_name']}")
 
     email_inp = page.locator('input[name="email"]').first
     if email_inp.count() > 0 and not email_inp.input_value():
@@ -904,17 +1343,18 @@ def fill_lever_application(page: Page, resume_path: Path, company: str, job_titl
         org_inp.fill(CANDIDATE["current_company"])
 
     # URLs
-    li_inp = page.locator('input[name*="LinkedIn"]').first
+    li_inp = page.locator('input[name*="LinkedIn"], input[name*="linkedin"]').first
     if li_inp.count() > 0:
         li_inp.fill(CANDIDATE["linkedin"])
 
-    gh_inp = page.locator('input[name*="GitHub"]').first
+    # Do NOT fill GitHub with LinkedIn for business/revenue roles
+    gh_inp = page.locator('input[name*="GitHub"], input[name*="github"]').first
     if gh_inp.count() > 0:
-        gh_inp.fill(CANDIDATE.get("github") or CANDIDATE.get("linkedin"))
+        gh_inp.fill("")
 
-    port_inp = page.locator('input[name*="Portfolio"]').first
+    port_inp = page.locator('input[name*="Portfolio"], input[name*="portfolio"]').first
     if port_inp.count() > 0:
-        port_inp.fill(CANDIDATE.get("portfolio") or CANDIDATE.get("linkedin"))
+        port_inp.fill(CANDIDATE["linkedin"])
 
     for extra_url in page.locator('input[name*="Twitter"], input[name*="Other"]').all():
         extra_url.fill("")
@@ -932,7 +1372,12 @@ def fill_lever_application(page: Page, resume_path: Path, company: str, job_titl
             sel_name = (sel.get_attribute("name") or "").lower()
             if any(k in s_text for k in ["location", "which location"]) or "location" in sel_name:
                 for opt in sel.locator('option').all():
-                    if any(loc in opt.inner_text().lower() for loc in ["bangalore", "bengaluru", "india"]):
+                    opt_txt = opt.inner_text().lower().strip()
+                    if opt_txt in ["india", "bengaluru", "bangalore", "karnataka"]:
+                        sel.select_option(value=opt.get_attribute("value"))
+                        print(f"            Selected [{opt.inner_text().strip()}] for Location")
+                        break
+                    elif any(loc in opt_txt for loc in ["bangalore", "bengaluru"]) or ("india" in opt_txt and not any(bad in opt_txt for bad in ["ocean", "british", "indiana"])):
                         sel.select_option(value=opt.get_attribute("value"))
                         print(f"            Selected [{opt.inner_text().strip()}] for Location")
                         break
@@ -987,8 +1432,17 @@ def fill_lever_application(page: Page, resume_path: Path, company: str, job_titl
             
             ta = q.locator('textarea').first
             if ta.count() > 0 and ta.is_visible() and not ta.input_value():
-                ans = answer_custom_question(q_text, context_notes)
-                ta.fill(ans)
+                if any(k in q_lower for k in ["expected", "compensation", "salary", "ctc"]):
+                    ta.fill(resolve_salary(q_lower, is_current_override=False))
+                elif any(k in q_lower for k in ["current", "compensation", "salary", "ctc"]):
+                    ta.fill(resolve_salary(q_lower, is_current_override=True))
+                elif any(k in q_lower for k in ["notice", "days to join"]):
+                    ta.fill(resolve_notice_period(q_lower))
+                elif any(k in q_lower for k in ["years of", "experience"]) and len(q_lower.split()) < 8:
+                    ta.fill(resolve_experience(q_lower))
+                else:
+                    ans = answer_custom_question(q_text, context_notes)
+                    ta.fill(ans)
                 continue
 
             inp = q.locator('input[type="text"]').first
@@ -996,18 +1450,58 @@ def fill_lever_application(page: Page, resume_path: Path, company: str, job_titl
                 inp_name = (inp.get_attribute("name") or "").lower()
                 if any(k in inp_name for k in ["urls[", "eeo[", "phone", "email", "location", "org", "name"]):
                     continue
-                ans = answer_custom_question(q_text, context_notes)
-                inp.fill(ans[:150])
+                if any(k in q_lower for k in ["expected", "compensation", "salary", "ctc"]):
+                    inp.fill(resolve_salary(q_lower, is_current_override=False))
+                elif any(k in q_lower for k in ["current", "compensation", "salary", "ctc"]):
+                    inp.fill(resolve_salary(q_lower, is_current_override=True))
+                elif any(k in q_lower for k in ["notice", "days"]):
+                    inp.fill(resolve_notice_period(q_lower))
+                elif any(k in q_lower for k in ["years", "experience"]) and len(q_lower.split()) < 8:
+                    inp.fill(resolve_experience(q_lower))
+                else:
+                    ans = answer_custom_question(q_text, context_notes)
+                    inp.fill(ans[:150])
                 continue
 
             radios = q.locator('input[type="radio"]').all()
             if radios:
-                if any(k in q_lower for k in ["sponsorship", "require visa", "visa support"]):
-                    no_r = next((r for r in radios if "no" in (r.evaluate('e => e.closest("label")?.innerText || ""').lower())), None)
+                radio_items = [(r, (r.evaluate('e => e.closest("label")?.innerText || ""').strip().lower())) for r in radios]
+                if any(k in q_lower for k in ["gender", "describe your gender"]):
+                    m_r = next((r for r, l in radio_items if l == "male" or "male" in l), None)
+                    if m_r:
+                        m_r.check(force=True)
+                elif any(k in q_lower for k in ["experience", "years of relevant", "total years"]):
+                    h_r = next((r for r, l in radio_items if any(x in l for x in ["8yrs +", "8+", "8 yrs", "8-", ">8", "5+"])), None)
+                    if h_r:
+                        h_r.check(force=True)
+                elif any(k in q_lower for k in ["compensation", "salary", "current ctc"]):
+                    c_r = next((r for r, l in radio_items if any(x in l for x in [">35", "35 lacs", "35+", ">30"])), None)
+                    if c_r:
+                        c_r.check(force=True)
+                elif any(k in q_lower for k in ["based out of", "currently in", "located in bangalore", "in bangalore", "in bengaluru"]):
+                    y_r = next((r for r, l in radio_items if l == "yes" or "yes" in l), None)
+                    if y_r:
+                        y_r.check(force=True)
+                elif any(k in q_lower for k in ["willing to relocate", "relocate"]):
+                    na_r = next((r for r, l in radio_items if "not applicable" in l), None)
+                    if not na_r:
+                        na_r = next((r for r, l in radio_items if "yes" in l), None)
+                    if na_r:
+                        na_r.check(force=True)
+                elif any(k in q_lower for k in ["how did you", "know about", "hear about"]):
+                    li_r = next((r for r, l in radio_items if "linkedin" in l), None)
+                    if li_r:
+                        li_r.check(force=True)
+                elif any(k in q_lower for k in ["sponsorship", "require visa", "visa support"]):
+                    no_r = next((r for r, l in radio_items if "no" in l), None)
+                    if no_r:
+                        no_r.check(force=True)
+                elif any(k in q_lower for k in ["employed", "employee", "worked", "worked for", "worked at", "former", "previously", "relative", "conflict", "non-compete", "felony", "misconduct"]):
+                    no_r = next((r for r, l in radio_items if "no" in l), None)
                     if no_r:
                         no_r.check(force=True)
                 elif any(k in q_lower for k in ["authorized", "eligible", "right to work", "18 years"]):
-                    yes_r = next((r for r in radios if "yes" in (r.evaluate('e => e.closest("label")?.innerText || ""').lower())), None)
+                    yes_r = next((r for r, l in radio_items if "yes" in l), None)
                     if yes_r:
                         yes_r.check(force=True)
         except Exception:
@@ -1015,12 +1509,175 @@ def fill_lever_application(page: Page, resume_path: Path, company: str, job_titl
 
     for cb in page.locator('input[type="checkbox"]').all():
         try:
-            if not cb.is_checked():
-                cb.check(force=True)
+            cb_lbl = cb.evaluate('e => (e.closest("label")?.innerText || e.parentElement?.innerText || e.closest("div")?.innerText || "").toLowerCase()')
+            is_req = (cb.get_attribute("required") is not None) or (cb.get_attribute("aria-required") == "true")
+            if is_req or any(k in cb_lbl for k in ['agree', 'consent', 'privacy', 'acknowledge', 'terms', 'gdpr', 'policy']):
+                if not cb.is_checked():
+                    cb.check(force=True)
+            elif "asian" in cb_lbl and not any(bad in cb_lbl for bad in ["american indian", "alaska"]):
+                if not cb.is_checked():
+                    cb.check(force=True)
         except Exception:
             pass
 
     time.sleep(1)
+
+
+def fill_kula_application(page: Page, resume_path: Path, company: str, job_title: str) -> None:
+    """Fills Kula ATS application form (careers.kula.ai) with candidate details and custom answers."""
+    print("      [1/5] Navigating to Kula apply form...")
+    apply_tab = page.locator('button:has-text("Apply for this position"), a:has-text("Apply for this position")').first
+    if apply_tab.count() > 0 and apply_tab.is_visible():
+        try:
+            apply_tab.click()
+            time.sleep(2)
+        except Exception:
+            pass
+
+    print("      [2/5] Uploading resume...")
+    for f in page.locator('input[type="file"]').all():
+        try:
+            f.set_input_files(str(resume_path))
+        except Exception:
+            pass
+    time.sleep(2.5)
+
+    print("      [3/5] Filling Kula basic contact information...")
+    fn = page.locator('input[name="info.first_name"]').first
+    if fn.count() > 0:
+        fn.fill(CANDIDATE["first_name"])
+    ln = page.locator('input[name="info.last_name"]').first
+    if ln.count() > 0:
+        ln.fill(CANDIDATE["last_name"])
+    em = page.locator('input[name="info.email"]').first
+    if em.count() > 0:
+        em.fill(CANDIDATE["email"])
+    ph = page.locator('input#phone, input[name*="phone" i]').first
+    if ph.count() > 0:
+        ph.fill(CANDIDATE["phone_digits"])
+    li = page.locator('input[name="info.linkedin_url"]').first
+    if li.count() > 0:
+        li.fill(CANDIDATE["linkedin"])
+    addr = page.locator('input[name="info.address"]').first
+    if addr.count() > 0:
+        addr.fill("Bengaluru, Karnataka, India")
+
+    print("      [4/5] Populating Kula profile details (Education & Experience)...")
+    inst = page.locator('input[name*="institution"]').first
+    if inst.count() > 0:
+        inst.fill("National Institute of Technology")
+        time.sleep(0.4)
+        page.keyboard.press("ArrowDown")
+        page.keyboard.press("Enter")
+
+    deg = page.locator('input[name*="degree"]').first
+    if deg.count() > 0:
+        deg.fill("Bachelor")
+        time.sleep(0.4)
+        page.keyboard.press("ArrowDown")
+        page.keyboard.press("Enter")
+
+    exp_title = page.locator('input[name*="experience"][name*="title"]').first
+    if exp_title.count() > 0:
+        exp_title.fill(CANDIDATE.get("current_title") or "Lead - Strategy & Operations")
+
+    exp_comp = page.locator('input[name*="experience"][name*="company"]').first
+    if exp_comp.count() > 0:
+        exp_comp.fill(CANDIDATE.get("current_company") or "Technology Solutions")
+        time.sleep(0.4)
+        page.keyboard.press("ArrowDown")
+        page.keyboard.press("Enter")
+
+    print("      [5/5] Answering screening questions...")
+    context_notes = load_default_context_notes()
+    for inp in page.locator('input[name^="additional_info"]').all():
+        try:
+            ph_text = (inp.get_attribute("placeholder") or "").lower()
+            p_text = inp.evaluate('e => e.closest("div")?.innerText || ""').lower()
+            comb = ph_text + " " + p_text
+            if any(k in comb for k in ["comfortable", "location", "relocate", "onsite"]):
+                inp.fill("Yes")
+            elif any(k in comb for k in ["how soon", "join", "notice"]):
+                inp.fill("30")
+            elif "current" in comb and "ctc" in comb:
+                inp.fill("4000000")
+            elif "expected" in comb and "ctc" in comb:
+                inp.fill("5500000")
+            elif any(k in comb for k in ["experience", "years"]):
+                inp.fill("9")
+            else:
+                inp.fill("Yes")
+        except Exception:
+            pass
+
+    for ta in page.locator('textarea:not([name*="recaptcha"])').all():
+        try:
+            if ta.is_visible() and not ta.input_value():
+                q_text = ta.evaluate('e => e.closest("div")?.innerText || ""').strip()
+                ans = answer_custom_question(q_text, context_notes) if q_text else "Excited about the role and mission. With 9+ years experience across strategy, cross-functional execution, and CRO office leadership, I look forward to driving high-impact strategic initiatives."
+                ta.fill(ans)
+        except Exception:
+            pass
+
+    time.sleep(1)
+
+
+def check_fresh_confirmation_email(company: str, max_age_seconds: int = 180) -> Optional[str]:
+    """Scans Gmail IMAP for a fresh auto-confirmation email from ATS or company received within max_age_seconds."""
+    user = os.getenv("GMAIL_USER")
+    pwd = (os.getenv("GMAIL_APP_PASSWORD") or "").replace(" ", "")
+    if not user or not pwd:
+        return None
+    try:
+        mail = imaplib.IMAP4_SSL("imap.gmail.com")
+        mail.login(user, pwd)
+        for folder in ['"[Gmail]/All Mail"', '"[Gmail]/Spam"']:
+            mail.select(folder)
+            status, data = mail.search(None, 'ALL')
+            if data[0]:
+                msg_ids = data[0].split()
+                for mid in reversed(msg_ids[-8:]):
+                    status, mdata = mail.fetch(mid, "(RFC822)")
+                    msg = email.message_from_bytes(mdata[0][1])
+                    date_hdr = msg.get("Date")
+                    if date_hdr:
+                        try:
+                            msg_time = email.utils.parsedate_to_datetime(date_hdr).timestamp()
+                            if time.time() - msg_time > max_age_seconds:
+                                continue
+                        except Exception:
+                            pass
+                    subj = (msg.get("Subject") or "").lower()
+                    from_hdr = (msg.get("From") or "").lower()
+                    clean_c = re.sub(r'[^a-zA-Z0-9]', '', company.lower())
+                    clean_subj = re.sub(r'[^a-zA-Z0-9]', '', subj)
+                    clean_from = re.sub(r'[^a-zA-Z0-9]', '', from_hdr)
+                    c_parts = [p.lower() for p in re.findall(r'[a-zA-Z0-9]+', company) if len(p) > 2]
+
+                    # STRICT: Auto-confirmation MUST match this target company
+                    comp_matched = (clean_c in clean_subj) or (clean_c in clean_from) or any(p in subj or p in from_hdr for p in c_parts)
+                    if not comp_matched:
+                        continue
+
+                    # STRICT: Exclude security codes, verification codes, login tokens, and OTPs
+                    if any(k in subj for k in ["security code", "verification code", "verify your", "verification", "one-time", "login", "password"]):
+                        continue
+
+                    if any(k in subj for k in [
+                        "thank you for applying",
+                        "thanks for applying",
+                        "application received",
+                        "we have received your application",
+                        "received your application",
+                        "application submitted",
+                        "thank you for your interest"
+                    ]) or any(k in subj for k in ["application", "applying", "candidacy", "interest"]):
+                        mail.logout()
+                        return f"Verified via official confirmation email: '{msg.get('Subject')}' from {msg.get('From')}"
+        mail.logout()
+    except Exception:
+        pass
+    return None
 
 
 def execute_hard_check_submission(target: Union[Page, Frame], page: Page, company: str, job_id: int) -> Dict[str, Any]:
@@ -1028,10 +1685,92 @@ def execute_hard_check_submission(target: Union[Page, Frame], page: Page, compan
     clean_comp = re.sub(r'[^a-zA-Z0-9]', '_', company.lower())
     ts = time.strftime("%Y%m%d_%H%M%S")
 
-    submit_btn = target.locator('button.ashby-application-form-submit-button, form button[type="submit"], button#btn-submit, button#submit_app, button[type="submit"], input[type="submit"]').first
-    if submit_btn.count() == 0 or not submit_btn.is_visible():
-        submit_btn = target.locator('button:has-text("Submit application"), button:has-text("Submit Application"), button:has-text("SUBMIT APPLICATION")').first
-    if submit_btn.count() == 0 or not submit_btn.is_visible():
+    submit_btn = None
+    btn_candidates = [
+        'button#form_submit_2_0',
+        'button:has-text("APPLY NOW!")',
+        'button:has-text("Apply Now!")',
+        'button.ashby-application-form-submit-button',
+        'button:has-text("Submit application")',
+        'button:has-text("Submit Application")',
+        'button:has-text("SUBMIT APPLICATION")',
+        'button:has-text("Submit your application")',
+        'button#btn-submit',
+        'button#submit_app',
+        'form button[type="submit"]',
+        'button[type="submit"]',
+        'input[type="submit"]',
+        'button:has-text("Apply for this position")',
+        'button:has-text("Apply for this job")',
+        'button:has-text("Apply for Position")',
+        'button:has-text("Apply Now")',
+        'button:has-text("Apply now")',
+        'button:has-text("Start application")',
+        'button:has-text("Start Application")',
+        'button:has-text("JOIN NOW")',
+        'button:has-text("Join Now")',
+        'button:has-text("Send Application")',
+        'button:has-text("Submit")',
+        'button:has-text("SUBMIT")',
+        'button:has-text("Next")',
+        'button:has-text("Continue")',
+    ]
+    def is_valid_submit(b):
+        try:
+            if not b.is_visible():
+                return False
+            b_txt = (b.inner_text().strip() or b.get_attribute("value") or "").lower()
+            b_cls = (b.get_attribute("class") or "").lower()
+            b_id = (b.get_attribute("id") or "").lower()
+            if any(k in b_txt for k in ["favorite", "favourite", "bookmark", "share", "save", "alert", "near me", "search"]):
+                return False
+            if any(k in b_cls for k in ["favourite", "favorite"]):
+                return False
+            if any(k in b_id for k in ["favourite", "favorite"]):
+                return False
+            return True
+        except Exception:
+            return False
+
+    for cand in btn_candidates:
+        loc = target.locator(cand)
+        for idx in range(loc.count()):
+            btn = loc.nth(idx)
+            if is_valid_submit(btn):
+                submit_btn = btn
+                break
+        if submit_btn:
+            break
+
+    if not submit_btn and target != page:
+        for cand in btn_candidates:
+            loc = page.locator(cand)
+            for idx in range(loc.count()):
+                btn = loc.nth(idx)
+                if is_valid_submit(btn):
+                    submit_btn = btn
+                    break
+            if submit_btn:
+                break
+
+    if not submit_btn:
+        for f in page.frames:
+            if f == page.main_frame:
+                continue
+            for cand in btn_candidates:
+                loc = f.locator(cand)
+                for idx in range(loc.count()):
+                    btn = loc.nth(idx)
+                    if is_valid_submit(btn):
+                        submit_btn = btn
+                        target = f
+                        break
+                if submit_btn:
+                    break
+            if submit_btn:
+                break
+
+    if not submit_btn:
         proof = LOGS_DIR / f"blocked_nobtn_{clean_comp}_{job_id}_{ts}.png"
         page.screenshot(path=str(proof), full_page=True)
         return {
@@ -1048,12 +1787,36 @@ def execute_hard_check_submission(target: Union[Page, Frame], page: Page, compan
         pass
     time.sleep(1.0)
     try:
-        submit_btn.hover()
-        time.sleep(0.5)
-        submit_btn.click()
+        submit_btn.evaluate("e => e.click()")
     except Exception:
-        submit_btn.click(force=True)
+        try:
+            submit_btn.click(force=True, timeout=3000)
+        except Exception:
+            pass
     time.sleep(3)
+
+    # If it was a multi-step 'Start application' or 'Next' button, check if new fields or next submit button appeared
+    if any(k in btn_text.lower() for k in ["start", "next", "continue"]):
+        time.sleep(2)
+        # Check if form inputs are now visible
+        for extra_cand in [
+            'form button[type="submit"]',
+            'button[type="submit"]',
+            'button:has-text("Submit application")',
+            'button:has-text("Submit Application")',
+            'button:has-text("Apply for this position")',
+            'button:has-text("Submit")',
+            'button:has-text("SUBMIT")'
+        ]:
+            next_b = target.locator(extra_cand).first
+            if next_b.count() > 0 and next_b.is_visible():
+                print(f"      [Multi-step Form] Found subsequent submit button '{next_b.inner_text().strip()}', clicking...")
+                try:
+                    next_b.click()
+                except Exception:
+                    next_b.click(force=True)
+                time.sleep(3)
+                break
 
     # Check for immediate security code prompt (GitLab / Canonical / MongoDB / Greenhouse email verification)
     sec_inputs = []
@@ -1087,10 +1850,49 @@ def execute_hard_check_submission(target: Union[Page, Frame], page: Page, compan
             final_submit_btn = target.locator('form button[type="submit"], button[type="submit"], button:has-text("Submit application")').last
             if final_submit_btn.count() == 0:
                 final_submit_btn = page.locator('form button[type="submit"], button[type="submit"], button:has-text("Submit application")').last
-            is_disabled = final_submit_btn.get_attribute("disabled") is not None or "disabled" in (final_submit_btn.get_attribute("class") or "")
-            if not is_disabled:
-                print("      [Verification] Submit button enabled! Submitting verified application...")
-                final_submit_btn.click(force=True)
+            for _ in range(12):
+                is_disabled = final_submit_btn.get_attribute("disabled") is not None or "disabled" in (final_submit_btn.get_attribute("class") or "")
+                if not is_disabled:
+                    break
+                time.sleep(0.5)
+            print("      [Verification] Submitting verified application...")
+            final_submit_btn.click(force=True)
+            time.sleep(6)
+
+    # Check for single verification code input box (Toast / Clinch Talent verification)
+    single_code_inp = None
+    for _ in range(10):
+        for cand in ['input#code', 'input[name="code"]', 'input[placeholder*="validation code" i]']:
+            c_loc = target.locator(cand).first
+            if c_loc.count() > 0 and c_loc.is_visible():
+                single_code_inp = c_loc
+                break
+            if target != page:
+                c_loc2 = page.locator(cand).first
+                if c_loc2.count() > 0 and c_loc2.is_visible():
+                    single_code_inp = c_loc2
+                    break
+        if single_code_inp:
+            break
+        b_txt = (page.locator("body").inner_text() or "").lower()
+        if any(k in b_txt for k in ["thank you for applying", "your application has been received", "we have received your application", "application submitted"]):
+            break
+        time.sleep(1)
+
+    if single_code_inp:
+        print("      [Verification] Detected single code verification input box! Polling Gmail...")
+        code = fetch_latest_security_code(wait_seconds=60)
+        if code:
+            print(f"      [Verification] Retrieved verification code: {code}! Entering code...")
+            single_code_inp.click()
+            single_code_inp.fill(code)
+            time.sleep(1)
+            v_btn = target.locator('button:has-text("VERIFY"), button:has-text("Verify"), input[value*="VERIFY" i]').first
+            if v_btn.count() == 0 and target != page:
+                v_btn = page.locator('button:has-text("VERIFY"), button:has-text("Verify"), input[value*="VERIFY" i]').first
+            if v_btn.count() > 0 and v_btn.is_visible():
+                print(f"      [Verification] Clicking '{v_btn.inner_text().strip()}' button...")
+                v_btn.click(force=True)
                 time.sleep(5)
 
     # Check for hCaptcha
@@ -1121,40 +1923,60 @@ def execute_hard_check_submission(target: Union[Page, Frame], page: Page, compan
             body_text = page.locator("body").inner_text().lower()
             if hasattr(target, "locator"):
                 body_text += " " + target.locator("body").inner_text().lower()
+            if "flagged as possible spam" in body_text:
+                error_list.append("Flagged as possible spam by ATS (anti-bot triggered)")
+                break
             if any(k in body_text for k in [
-                "we couldn't submit your application",
                 "applied for more than",
                 "limit their applications",
-                "application limit"
+                "limiting applications",
+                "maximum number of applications",
+                "reached the maximum",
+                "within the last 90 days",
+                "within the last 60 days",
+                "within the last 30 days",
+                "within 60 days",
+                "within 30 days",
+                "within 90 days",
+                "exceeded the maximum",
+                "more than 2 times in any 60 day"
             ]):
                 error_list.append("Company Application Limit Reached (Max roles allowed by company policy)")
                 break
-            if "flagged as possible spam" in body_text:
-                error_list.append("Flagged as possible spam by ATS")
+            if "we couldn't submit your application" in body_text:
+                error_list.append("Form submission error (field validation or required answer missing)")
                 break
         except Exception:
             pass
 
         # 1. URL change
-        if any(k in curr_url for k in ["/confirmation", "/thank_you", "/thanks", "/submitted", "/success", "submitted=true", "complete"]):
+        if any(k in curr_url for k in ["/confirmation", "/thank_you", "/thanks", "/submitted", "/success", "submitted=true", "complete", "applysuccess=true"]):
             confirmed = True
             confirmation_reason = f"Redirected to confirmation URL: {curr_url}"
             break
 
-        # 2. Confirmation DOM text
+        # 2. Confirmation DOM text (Strict Phrases Only)
         try:
             if any(k in body_text for k in [
                 "thank you for applying",
+                "thank you for your interest",
+                "thanks for applying",
                 "your application has been received",
                 "we have received your application",
                 "application submitted",
                 "application received",
-                "thank you!",
                 "application has been submitted",
                 "your application was successfully submitted",
+                "your application was submitted successfully",
+                "we will contact you for the next steps",
                 "successfully submitted",
-                "application was successfully submitted"
-            ]):
+                "application was successfully submitted",
+                "track your application",
+                "delighted that you would consider",
+                "view more jobs at",
+                "apply now\nthank you",
+                "apply now\r\nthank you"
+            ]) or re.search(r'apply now\s+thank you', body_text):
                 confirmed = True
                 confirmation_reason = "Found verified confirmation heading in DOM"
                 break
@@ -1162,19 +1984,35 @@ def execute_hard_check_submission(target: Union[Page, Frame], page: Page, compan
             pass
 
         # 3. Validation errors
-        error_locs = target.locator('.error, .invalid-feedback, [aria-invalid="true"], .field-error, p:has-text("This field is required")')
+        error_locs = target.locator('.error, .invalid-feedback, [aria-invalid="true"], .field-error, [class*="--error"], [id$="-error"], p:has-text("This field is required"), p:has-text("is required"), div:has-text("Your form needs corrections"), [class*="banner-error"], li:has-text("Invalid value"), div:has-text("Please correct the errors")')
+        if error_locs.count() == 0 and target != page:
+            error_locs = page.locator('.error, .invalid-feedback, [aria-invalid="true"], .field-error, [class*="--error"], [id$="-error"], p:has-text("This field is required"), p:has-text("is required"), div:has-text("Your form needs corrections"), [class*="banner-error"], li:has-text("Invalid value"), div:has-text("Please correct the errors")')
         if error_locs.count() > 0:
             for e_idx in range(min(error_locs.count(), 5)):
                 txt = error_locs.nth(e_idx).inner_text().strip()
                 if txt and txt not in error_list:
                     error_list.append(txt)
 
+    # Secondary check: verify incoming ATS auto-confirmation email in Gmail (ONLY IF no validation errors exist on page)
+    if not confirmed and not error_list:
+        print("      [IMAP Check] Checking Gmail for incoming ATS auto-confirmation email (up to 30s)...")
+        for _ in range(6):
+            email_confirm = check_fresh_confirmation_email(company, max_age_seconds=180)
+            if email_confirm:
+                confirmed = True
+                confirmation_reason = email_confirm
+                break
+            time.sleep(5)
+
     if confirmed:
         proof = LOGS_DIR / f"submitted_hardcheck_{clean_comp}_{job_id}_{ts}.png"
         try:
             page.screenshot(path=str(proof), full_page=True)
         except Exception:
-            pass
+            try:
+                page.screenshot(path=str(proof))
+            except Exception as err:
+                print(f"      [Screenshot note]: {err}")
         print(f"      >>> [HARD CHECK VERIFIED: SUBMITTED] Proof: {proof.name} ({confirmation_reason}) <<<\n")
         return {
             "status": "Submitted",
@@ -1204,10 +2042,47 @@ def process_direct_job(browser_or_context, job_record: tuple, is_persistent_cont
     print(f"URL:    {url}")
     print(f"{'='*70}")
 
-    res_name = matched_resume or "V3_Strategy_Ops_ChiefOfStaff.pdf"
-    resume_path = BASE_DIR / "resumes" / res_name
-    if not resume_path.exists():
-        resume_path = BASE_DIR / "resumes" / "V1_GTM_Revenue_Strategy.pdf"
+    # 1. Company Policy Gate (<= 2 applications per company, cooloffs, blacklists)
+    policy_mgr = CompanyPolicyManager(DB_PATH)
+    can_apply, policy_reason = policy_mgr.can_apply(company)
+    if not can_apply:
+        print(f"      [Company Policy Block]: {policy_reason}")
+        return {
+            "status": "Skipped",
+            "proof": None,
+            "notes": f"Skipped: {policy_reason}"
+        }
+
+    # 2. Eligibility & Seniority Gatekeeper Check
+    job_post = JobPosting(
+        company=company,
+        title=title,
+        location=location,
+        url=url,
+        ats_platform=ATSPlatform.GENERIC
+    )
+    elig = evaluate_eligibility(job_post)
+    if not elig.is_eligible:
+        print(f"      [Eligibility Gatekeeper Block]: {elig.reason}")
+        return {
+            "status": "Skipped",
+            "proof": None,
+            "notes": f"Ineligible: {elig.reason}"
+        }
+
+    # Deterministic resume routing based on candidate architecture
+    if elig.target_resume and (BASE_DIR / elig.target_resume).exists():
+        resume_path = BASE_DIR / elig.target_resume
+    else:
+        res_name = matched_resume or "V1_GTM_Revenue_Strategy.pdf"
+        p = Path(res_name)
+        if p.is_absolute() and p.exists():
+            resume_path = p
+        elif (BASE_DIR / "resumes" / res_name).exists():
+            resume_path = BASE_DIR / "resumes" / res_name
+        else:
+            resume_path = BASE_DIR / "resumes" / "V1_GTM_Revenue_Strategy.pdf"
+    print(f"      [Target Resume Selected]: {resume_path.name} (Matched Track: {elig.matched_track})")
 
     if is_persistent_context:
         page = browser_or_context.new_page()
@@ -1231,22 +2106,96 @@ def process_direct_job(browser_or_context, job_record: tuple, is_persistent_cont
         url = url.rstrip("/") + "/application"
 
     try:
-        if "jobs.lever.co" in url:
-            page.goto(url, wait_until="domcontentloaded", timeout=25000)
-        else:
-            try:
-                page.goto(url, wait_until="networkidle", timeout=35000)
-            except Exception:
-                page.goto(url, wait_until="domcontentloaded", timeout=15000)
+        try:
+            page.goto(url, wait_until="domcontentloaded", timeout=20000)
+        except Exception:
+            page.goto(url, wait_until="load", timeout=15000)
         time.sleep(2)
 
-        # Handle top-level apply buttons
-        if "greenhouse.io" not in page.url and "ashbyhq.com" not in page.url and "jobs.lever.co" not in page.url:
-            apply_btns = page.locator('a:has-text("Apply"), button:has-text("Apply"), a:has-text("Apply Now")')
-            if apply_btns.count() > 0 and apply_btns.first.is_visible():
+        # Wait up to 6s for redirects (e.g. Greenhouse redirects to careers.company.com/jobs?gh_jid=...)
+        for _ in range(6):
+            if page.locator('a:has-text("APPLY NOW"), a:has-text("Apply Now"), button#form_submit_2_0, input[type="file"]').count() > 0:
+                break
+            time.sleep(1)
+
+        # Check for expired/closed Greenhouse job boards (?error=true or Error 404)
+        body_text_initial = ""
+        try:
+            body_text_initial = page.locator("body").inner_text().lower()
+        except Exception:
+            pass
+
+        if "error=true" in page.url.lower() or "error 404" in body_text_initial or "can't find what you're looking for" in body_text_initial:
+            clean_comp = re.sub(r'[^a-zA-Z0-9]', '_', company.lower())
+            proof = LOGS_DIR / f"closed_job_{clean_comp}_{job_id}.png"
+            try:
+                page.screenshot(path=str(proof), full_page=True)
+            except Exception:
+                pass
+            print(f"      [Job Closed/Expired]: Posting closed/expired by company ({page.url})")
+            return {
+                "status": "Closed - Position Expired",
+                "proof": str(proof),
+                "notes": f"Job posting closed/expired by company ({page.url})"
+            }
+
+        # Dismiss common cookie / privacy banners that block form interactions
+        cookie_selectors = [
+            '#consent_agree',
+            'button#consent_agree',
+            'button:has-text("I accept")',
+            '#ketch-banner-button-primary',
+            '#onetrust-accept-btn-handler',
+            '#onetrust-reject-all-handler',
+            'button:has-text("Accept All")',
+            'button:has-text("Accept all")',
+            'button:has-text("Accept Cookies")',
+            'button:has-text("Accept cookies")',
+            'button:has-text("Accept")',
+            'button:has-text("I Agree")',
+            'button:has-text("Allow all")',
+            'button:has-text("Reject All")',
+            'button[id*="cookie" i]:has-text("Accept")',
+        ]
+        for c_sel in cookie_selectors:
+            cb = page.locator(c_sel)
+            if cb.count() > 0 and cb.first.is_visible():
                 try:
-                    apply_btns.first.click()
-                    time.sleep(2.5)
+                    cb.first.click()
+                    time.sleep(1)
+                    break
+                except Exception:
+                    pass
+
+        # Handle top-level apply buttons (e.g. company career sites embedding Greenhouse or Ashby)
+        apply_btn_selectors = [
+            'a[href*="/form?gh_jid="]',
+            'a[href*="gh_jid="]:not([href*="#/"])',
+            'a:has-text("Apply Now for")',
+            'a:has-text("Apply for this position")',
+            'a:has-text("Apply for this job")',
+            'button:has-text("Apply for this position")',
+            'button:has-text("Apply for this job")',
+            'a[href*="#apply"]',
+            '[role="tab"]:has-text("Application")',
+            'button:has-text("Apply to job"):not(#form_submit_2_0)',
+            'a:has-text("APPLY NOW"):not([href*="#/"]):not([href*="jobs.elastic.co/#/"])',
+            'a:has-text("Apply Now"):not([href*="#/"]):not([href*="jobs.elastic.co/#/"])',
+            'a:has-text("Apply now"):not([href*="#/"]):not([href*="jobs.elastic.co/#/"])',
+            'button:has-text("APPLY NOW"):not(#form_submit_2_0)',
+            'button:has-text("Apply Now"):not(#form_submit_2_0)',
+            'button:has-text("Apply now"):not(#form_submit_2_0)',
+            'button:has-text("Apply"):not(#form_submit_2_0)',
+            'a:has-text("Apply"):not([href*="#/"]):not([href*="jobs.elastic.co/#/"])',
+        ]
+        for a_sel in apply_btn_selectors:
+            apply_b = page.locator(a_sel)
+            if apply_b.count() > 0 and apply_b.first.is_visible():
+                try:
+                    print(f"      [Portal Nav] Clicking apply button: {a_sel}")
+                    apply_b.first.click(force=True)
+                    time.sleep(3)
+                    break
                 except Exception:
                     pass
 
@@ -1257,28 +2206,43 @@ def process_direct_job(browser_or_context, job_record: tuple, is_persistent_cont
         except Exception:
             pass
 
-        # Check for iframe (MongoDB, HighRadius, Zenoti)
+        # Check for iframe (MongoDB, HighRadius, Zenoti, PubMatic, Fivetran, Toast, Payoneer)
         grnhse_frame = None
-        for f in page.frames:
-            if f.name == "grnhse_iframe" or "greenhouse.io" in f.url:
-                grnhse_frame = f
-                break
-        if not grnhse_frame:
-            iframe_elem = page.locator("iframe#grnhse_iframe, iframe[src*='greenhouse.io']").first
-            if iframe_elem.count() > 0:
-                try:
-                    grnhse_frame = iframe_elem.content_frame()
-                except Exception:
-                    pass
+        if "greenhouse.io" not in page.url:
+            for _ in range(8):
+                for f in page.frames:
+                    if f != page.main_frame and (f.name == "grnhse_iframe" or "job-boards.greenhouse.io" in f.url or "boards.greenhouse.io" in f.url):
+                        grnhse_frame = f
+                        break
+                if grnhse_frame:
+                    break
+                iframe_elem = page.locator("iframe#grnhse_iframe, iframe[src*='greenhouse.io']").first
+                if iframe_elem.count() > 0:
+                    try:
+                        grnhse_frame = iframe_elem.content_frame()
+                        if grnhse_frame:
+                            break
+                    except Exception:
+                        pass
+                time.sleep(1)
         target_ctx = grnhse_frame if grnhse_frame else page
 
         # Detect portal type
-        if "ashbyhq.com" in page.url or "ashby" in page.url:
+        if "kula.ai" in page.url or "kula" in page.url:
+            fill_kula_application(page, resume_path, company, title)
+        elif "ashbyhq.com" in page.url or "ashby" in page.url:
             fill_ashby_application(page, resume_path, company, title)
         elif "jobs.lever.co" in page.url or "lever.co" in page.url:
             fill_lever_application(page, resume_path, company, title)
         else:
             # Greenhouse or standard portal
+            if target_ctx.locator('input[type="file"]').count() == 0:
+                for a_sel in ['a:has-text("APPLY NOW")', 'a:has-text("Apply Now")', 'a[href*="#apply"]']:
+                    ab = page.locator(a_sel).first
+                    if ab.count() > 0 and ab.is_visible():
+                        ab.click()
+                        time.sleep(2.5)
+                        break
             fill_greenhouse_application(target_ctx, resume_path, company, title)
 
         result = execute_hard_check_submission(target_ctx, page, company, job_id)
@@ -1308,7 +2272,7 @@ def process_direct_job(browser_or_context, job_record: tuple, is_persistent_cont
                 pass
 
 
-def run_batch(limit: int = 10, priority: Optional[str] = None, company: Optional[str] = None, job_id: Optional[int] = None, headful: bool = False):
+def run_batch(limit: int = 10, priority: Optional[str] = None, company: Optional[str] = None, job_id: Optional[int] = None, filter_ats: Optional[str] = None, headful: bool = False):
     print("=" * 70)
     print("       STRICT HARD-CHECK DIRECT ATS SUBMISSION ENGINE")
     print(f"Candidate: {CANDIDATE['full_name']} | Phone: {CANDIDATE['phone']} | Email: {CANDIDATE['email']}")
@@ -1319,7 +2283,8 @@ def run_batch(limit: int = 10, priority: Optional[str] = None, company: Optional
         query = """
             SELECT id, company, title, location, url, matched_resume
             FROM jobs
-            WHERE board_type LIKE 'Direct%' AND status != 'Submitted' AND status != 'Duplicate'
+            WHERE (LOWER(board_type) LIKE 'direct%' OR LOWER(board_type) IN ('ashby', 'greenhouse', 'lever')) 
+              AND status NOT IN ('Submitted', 'Duplicate', 'Closed - Position Expired')
         """
         params = []
         if job_id:
@@ -1328,6 +2293,13 @@ def run_batch(limit: int = 10, priority: Optional[str] = None, company: Optional
         elif company:
             query += " AND company LIKE ?"
             params.append(f"%{company}%")
+        elif filter_ats:
+            if filter_ats.lower() == "greenhouse":
+                query += " AND url LIKE '%greenhouse%'"
+            elif filter_ats.lower() == "ashby":
+                query += " AND url LIKE '%ashby%'"
+            elif filter_ats.lower() == "lever":
+                query += " AND url LIKE '%lever.co%'"
         elif priority == "Remote":
             query += " AND (location LIKE '%Remote%' OR location LIKE '%Worldwide%')"
         elif priority == "Hyderabad":
@@ -1343,7 +2315,7 @@ def run_batch(limit: int = 10, priority: Optional[str] = None, company: Optional
         c.execute(query, params)
         jobs = c.fetchall()
 
-    filt_desc = f"Job #{job_id}" if job_id else (f"Company '{company}'" if company else (priority or "All"))
+    filt_desc = f"Job #{job_id}" if job_id else (f"Company '{company}'" if company else (f"ATS '{filter_ats}'" if filter_ats else (priority or "All")))
     print(f"Found {len(jobs)} jobs ready for hard-check processing (Filter: {filt_desc}).")
     if not jobs:
         print("No pending direct jobs found for this filter.")
@@ -1415,7 +2387,8 @@ if __name__ == "__main__":
     parser.add_argument("--priority", type=str, default=None, choices=["Remote", "Hyderabad", "Bengaluru", "Gurugram"], help="Priority filter")
     parser.add_argument("--company", type=str, default=None, help="Filter by company name")
     parser.add_argument("--job-id", type=int, default=None, help="Process a specific job ID")
+    parser.add_argument("--filter-ats", type=str, default=None, choices=["greenhouse", "ashby", "lever"], help="Filter by ATS platform")
     parser.add_argument("--headful", action="store_true", help="Run browser in headful mode")
     args = parser.parse_args()
 
-    run_batch(limit=args.limit, priority=args.priority, company=args.company, job_id=args.job_id, headful=args.headful)
+    run_batch(limit=args.limit, priority=args.priority, company=args.company, job_id=args.job_id, filter_ats=args.filter_ats, headful=args.headful)

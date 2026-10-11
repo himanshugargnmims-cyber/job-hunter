@@ -49,22 +49,56 @@ def fallback_answer(question_text: str, qa_data: dict) -> str:
     title = qa_data.get("screening_answers", {}).get("current_title") or qa_data.get("current_title", "Lead")
     summary = qa_data.get("screening_answers", {}).get("summary") or qa_data.get("summary", "")
 
-    if any(k in q_norm for k in ["notice", "start date", "how soon"]):
-        return f"My current notice period is {notice}. I am prepared to begin promptly upon offer finalization."
+    if any(k in q_norm for k in ["previously worked", "former employee", "currently work here", "worked for us", "worked at", "employed here", "ever worked", "previously been employed", "employee id", "employee number", "company email"]):
+        return "No"
 
-    if any(k in q_norm for k in ["sponsorship", "authorized", "visa"]):
-        return work_auth
+    if any(k in q_norm for k in ["family member", "relative working", "relatives employed", "nepotism"]):
+        return "No, I do not have any relatives or family members employed here."
+
+    if any(k in q_norm for k in ["twitter", "x handle"]):
+        return qa_data.get("twitter_url", "https://x.com")
+
+    if any(k in q_norm for k in ["how did you hear", "hear about this", "where did you hear", "source"]):
+        return "Company Career Page / LinkedIn"
+
+    if any(k in q_norm for k in ["conflict of interest", "non-compete", "restrictive covenant", "disciplinary", "felony", "criminal"]):
+        return "No, I am not subject to any conflicts of interest or restrictive covenants."
+
+    if any(k in q_norm for k in ["notice", "start date", "how soon"]):
+        if any(k in q_norm for k in ["in month", "in months", "(months)"]):
+            return "1"
+        elif any(k in q_norm for k in ["in week", "in weeks", "(weeks)"]):
+            return "4"
+        elif any(k in q_norm for k in ["number", "days (number)", "numeric", "in days", "(days)"]):
+            return "30"
+        return notice
+
+    if any(k in q_norm for k in ["sponsorship", "require visa", "visa support", "require sponsorship", "immigration"]):
+        return "No"
+
+    if any(k in q_norm for k in ["work authorization", "authorized to work", "legally authorized", "eligible to work"]):
+        return "Yes, I am fully authorized to work in India."
 
     if any(k in q_norm for k in ["relocate", "commute", "relocation", "location", "located", "where are you", "based"]):
         reloc = qa_data.get("willing_to_relocate", "Open to discussing relocation based on role.")
         return f"I am based in {location}. {reloc}"
 
-    if any(k in q_norm for k in ["years of experience", "how many years"]):
+    if any(k in q_norm for k in ["years of experience", "how many years", "total experience"]):
+        if any(k in q_norm for k in ["number", "digits", "in years"]) or len(q_norm.split()) < 10:
+            return "9"
         return f"I have {years_exp} years of cross-functional experience leading high-impact initiatives."
 
     if any(k in q_norm for k in ["salary", "compensation", "ctc"]):
-        comp = qa_data.get("screening_answers", {}).get("compensation", "My compensation expectations are flexible and benchmarked to market bands for this scope.")
-        return comp
+        is_current = any(k in q_norm for k in ["current", "present", "last drawn"])
+        is_expected = any(k in q_norm for k in ["expected", "expectation", "desire", "looking for"])
+        is_lakhs = any(k in q_norm for k in ["lakh", "lakhs", "lpa", "in lacs"])
+
+        if is_current:
+            return "40" if is_lakhs else "4000000"
+        elif is_expected:
+            return "55" if is_lakhs else "5500000"
+
+        return "55" if is_lakhs else "5500000"
 
     if any(k in q_norm for k in ["why", "interested", "role", "tell me about"]):
         if summary:
@@ -87,6 +121,21 @@ def answer_custom_question(question_text: str, context_notes: Optional[str] = No
     Returns:
         Direct, professional 2-3 sentence answer in first person with quantified facts.
     """
+    q_norm = (question_text or "").lower()
+
+    # Deterministic safety guards for employment history, relatives, and conflicts
+    if any(k in q_norm for k in ["previously worked", "former employee", "currently work here", "worked for us", "worked at", "employed here", "ever worked", "previously been employed"]):
+        return "No, I have not previously worked for the company."
+
+    if any(k in q_norm for k in ["family member", "relative working", "relatives employed", "nepotism"]):
+        return "No, I do not have any relatives or family members employed here."
+
+    if any(k in q_norm for k in ["conflict of interest", "non-compete", "restrictive covenant", "disciplinary", "felony", "criminal"]):
+        return "No, I am not subject to any conflicts of interest or restrictive covenants."
+
+    if any(k in q_norm for k in ["sponsorship", "require visa", "visa support", "require sponsorship"]):
+        return "No, I do not require visa sponsorship."
+
     if not context_notes:
         context_notes = load_default_context_notes()
 

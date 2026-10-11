@@ -75,7 +75,7 @@ class SheetUpdater:
     def _init_db(self):
         """Ensure SQLite schema exists."""
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, timeout=30.0) as conn:
             cursor = conn.cursor()
             cursor.execute("""
             CREATE TABLE IF NOT EXISTS jobs (
@@ -149,7 +149,7 @@ class SheetUpdater:
 
         # From DB
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with sqlite3.connect(self.db_path, timeout=30.0) as conn:
                 cursor = conn.cursor()
                 cursor.execute("SELECT url FROM jobs")
                 for (u,) in cursor.fetchall():
@@ -164,7 +164,7 @@ class SheetUpdater:
         """Returns set of all job URLs that have already been genuinely submitted."""
         urls = set()
         try:
-            with sqlite3.connect(self.db_path) as conn:
+            with sqlite3.connect(self.db_path, timeout=30.0) as conn:
                 cursor = conn.cursor()
                 cursor.execute("SELECT url FROM jobs WHERE status = 'Submitted'")
                 for (u,) in cursor.fetchall():
@@ -222,7 +222,7 @@ class SheetUpdater:
             writer.writerow(row)
 
         # 2. Insert into SQLite DB
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, timeout=30.0) as conn:
             cursor = conn.cursor()
             cursor.execute("""
             INSERT OR REPLACE INTO jobs (
@@ -246,6 +246,23 @@ class SheetUpdater:
 
         return True
 
+    def append_row(self, job_dict: Dict[str, Any]) -> bool:
+        """Helper to append a job dictionary into CSV, SQLite, and Google Sheets."""
+        return self.log_application(
+            company=job_dict.get("company", "Company"),
+            job_title=job_dict.get("title", job_dict.get("job_title", "Leadership Role")),
+            location=job_dict.get("location", "India"),
+            url=job_dict.get("url", ""),
+            selected_resume=job_dict.get("matched_resume", job_dict.get("selected_resume", "")),
+            fit_score=float(job_dict.get("fit_score", 90.0)),
+            rationale=job_dict.get("fit_rationale", job_dict.get("rationale", "")),
+            board_type=job_dict.get("board_type", "LinkedIn Easy Apply"),
+            description=job_dict.get("description", ""),
+            status=job_dict.get("status", "Found"),
+            notes=job_dict.get("notes", ""),
+            screenshot_path=job_dict.get("screenshot", job_dict.get("screenshot_path", ""))
+        )
+
     def update_status(self, url: str, new_status: str, notes: Optional[str] = None, screenshot_path: Optional[str] = None) -> bool:
         """Updates the status, screenshot, and optional notes for a job application."""
         if new_status not in VALID_STATUSES and new_status not in ("Pending Authentication", "Pending Approval"):
@@ -256,7 +273,7 @@ class SheetUpdater:
 
         # Update SQLite DB
         updated = False
-        with sqlite3.connect(self.db_path) as conn:
+        with sqlite3.connect(self.db_path, timeout=30.0) as conn:
             cursor = conn.cursor()
             notes_val = f"{notes} | Screenshot: {screenshot_path}" if (notes and screenshot_path) else (screenshot_path or notes)
             if notes_val is not None:

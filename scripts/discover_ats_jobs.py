@@ -62,15 +62,27 @@ TARGET_LOCATIONS = [
 ]
 
 TITLE_KEYWORDS = [
-    'gtm', 'go-to-market', 'go to market', 'revenue', 'revops', 'sales operations',
-    'sales ops', 'commercial', 'strategy', 'bizops', 'business operations',
+    # Track A: Revenue Operations & Commercial Operations
+    'revops', 'revenue operations', 'sales operations', 'sales ops', 'commercial operations',
+    'commercial program manager', 'gtm operations', 'go-to-market operations', 'deal desk',
+    'revenue strategy', 'revenue systems', 'revenue enablement',
+    
+    # Track B: Customer Success & Post-Sales Strategy
+    'customer success', 'customer operations', 'customer lifecycle', 'client success',
+    'client experience', 'retention manager', 'cs ops',
+    
+    # Track C: Strategy & Operations, Chief of Staff, Business Program Management
     'chief of staff', 'founders office', "founder's office", 'ceo office', "ceo's office",
-    'program manager', 'technical program manager', 'tpm', 'operations',
-    'operational excellence', 'customer success', 'customer operations',
-    'account management', 'deal desk', 'partnerships', 'enablement', 'escalations'
+    'cro office', "cro's office", 'strategy & operations', 'strategy and operations',
+    'bizops', 'stratops', 'business operations', 'corporate strategy', 'strategic initiatives',
+    'strategic programs', 'business program manager', 'business transformation',
+    'gtm strategy', 'go-to-market strategy', 'operational excellence'
 ]
 
 EXCLUDE_TITLE_KEYWORDS = [
+    # Strict Role Exclusions
+    'technical program manager', 'tpm', 'engineering program manager',
+    'product manager', 'technical product manager', 'group product manager',
     'software engineer', 'backend engineer', 'frontend engineer', 'ios engineer',
     'android engineer', 'machine learning engineer', 'ml engineer', 'data engineer',
     'security engineer', 'qa engineer', 'sre', 'devops engineer', 'site reliability',

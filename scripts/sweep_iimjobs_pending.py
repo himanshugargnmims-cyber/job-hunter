@@ -27,25 +27,32 @@ def handle_screening_questionnaire(page: Page) -> bool:
     """Handles Step 2 questionnaire (Submit a Form / screening questions)."""
     print("   [Questionnaire] Handling screening questions...")
     try:
-        # 1. Radio Buttons: select 'Yes' or positive responses for each question
-        yes_labels = page.locator('label:has-text("Yes"), span:has-text("Yes"), input[value="Yes"] + label')
-        if yes_labels.count() > 0:
-            for y_i in range(yes_labels.count()):
+        # 1. Radio Buttons: check question context before selecting Yes/No
+        containers = page.locator('div.question-container, div.form-group, div.MuiFormGroup-root, div[class*="question"]')
+        if containers.count() > 0:
+            for c_i in range(containers.count()):
                 try:
-                    lbl = yes_labels.nth(y_i)
-                    if lbl.is_visible():
-                        lbl.click(force=True)
+                    c_el = containers.nth(c_i)
+                    c_text = (c_el.inner_text() or "").lower()
+                    is_negative = any(k in c_text for k in ["previously worked", "former employee", "currently work here", "worked at", "employed here", "family", "relative", "conflict"])
+                    target_val = "No" if is_negative else "Yes"
+                    btn = c_el.locator(f'label:has-text("{target_val}"), span:has-text("{target_val}"), input[value="{target_val}"] + label').first
+                    if btn.count() > 0 and btn.is_visible():
+                        btn.click(force=True)
                         page.wait_for_timeout(150)
                 except Exception:
                     pass
         else:
-            radios = page.locator('input[type="radio"]')
-            for r_i in range(0, radios.count(), 2):
-                try:
-                    radios.nth(r_i).click(force=True)
-                    page.wait_for_timeout(150)
-                except Exception:
-                    pass
+            yes_labels = page.locator('label:has-text("Yes"), span:has-text("Yes"), input[value="Yes"] + label')
+            if yes_labels.count() > 0:
+                for y_i in range(yes_labels.count()):
+                    try:
+                        lbl = yes_labels.nth(y_i)
+                        if lbl.is_visible():
+                            lbl.click(force=True)
+                            page.wait_for_timeout(150)
+                    except Exception:
+                        pass
 
         # 2. Notice period selection
         notice_options = [
@@ -87,9 +94,9 @@ def handle_screening_questionnaire(page: Page) -> bool:
 
                 combined = f"{placeholder} {name} {label_text}"
                 if "current ctc" in combined or "current salary" in combined or "ctc" in combined:
-                    inp.fill("35")
+                    inp.fill("40")
                 elif "expected ctc" in combined or "expected salary" in combined:
-                    inp.fill("50")
+                    inp.fill("55")
                 elif "experience" in combined or "total exp" in combined:
                     inp.fill("9")
                 elif "notice" in combined:

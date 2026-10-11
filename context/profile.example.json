@@ -1,0 +1,195 @@
+{
+  "candidate": {
+    "identity": {
+      "full_name": "Alex Taylor",
+      "first_name": "Alex",
+      "last_name": "Taylor",
+      "email": "alex.taylor@example.com",
+      "phone_formatted": "+1 555-0199",
+      "phone_digits": "5550199",
+      "country_code": "+1",
+      "linkedin_url": "https://www.linkedin.com/in/alex-taylor-sample",
+      "website_url": "https://alextaylor.dev",
+      "github_url": "",
+      "twitter_url": "https://x.com/alex_taylor"
+    },
+    "location": {
+      "country": "India",
+      "state": "Karnataka",
+      "city": "Bengaluru",
+      "postal_code": "560102",
+      "neighborhood": "Indiranagar",
+      "full_address": "Bengaluru, Karnataka, India, 560102",
+      "target_hubs": [
+        "Bengaluru",
+        "Bangalore",
+        "Gurugram",
+        "Gurgaon",
+        "Delhi NCR",
+        "Hyderabad"
+      ],
+      "willing_to_relocate": true,
+      "willing_to_commute_hybrid": true
+    },
+    "current_employment": {
+      "company": "Acme Technologies",
+      "designation": "Lead - Strategy & Operations",
+      "short_title": "Lead - GTM Strategy",
+      "start_year": 2024,
+      "gmv_managed": "$3B+/month across business units",
+      "previous_roles": [
+        {
+          "company": "Fasal Corp",
+          "title": "Founder's Office (Strategy & Program Partner)",
+          "years": "2022-2024"
+        },
+        {
+          "company": "Agritech Global",
+          "title": "Head of Operations",
+          "years": "2020-2022"
+        }
+      ]
+    },
+    "compensation": {
+      "current_ctc_lpa": 40,
+      "current_ctc_inr": 4000000,
+      "expected_ctc_lpa": 55,
+      "expected_ctc_inr": 5500000,
+      "minimum_acceptable_ctc_lpa": 45,
+      "currency": "INR",
+      "rule": "Never apply or accept roles below 45 LPA. Stated expectations are 55 LPA."
+    },
+    "tenure_and_notice": {
+      "total_years_integer": 9,
+      "total_years_display": "9+ years",
+      "notice_period_days": 30,
+      "notice_period_months": 1,
+      "notice_period_weeks": 4,
+      "rule": "Notice period is strictly 30 days. Enter 30 when asking for days, 1 when asking for months."
+    },
+    "work_authorization": {
+      "india": {
+        "is_citizen": true,
+        "authorized": true,
+        "requires_sponsorship": false
+      },
+      "united_states": {
+        "authorized": false,
+        "requires_sponsorship": true,
+        "status": "Does not hold US work authorization. Strictly disqualify US-only roles."
+      }
+    },
+    "education": [
+      {
+        "degree_level": "Master's Degree",
+        "degree_name": "Executive MBA",
+        "institution": "Premier Business School",
+        "specialization": "Strategy & Operations",
+        "start_year": "2021",
+        "end_year": "2022",
+        "is_mba": true,
+        "is_engineering": false
+      },
+      {
+        "degree_level": "Bachelor's Degree",
+        "degree_name": "Bachelor of Engineering (B.E.)",
+        "institution": "Institute of Engineering & Technology",
+        "specialization": "Computer Science & Engineering",
+        "start_year": "2013",
+        "end_year": "2017",
+        "is_mba": false,
+        "is_engineering": true
+      }
+    ],
+    "eeo_demographics": {
+      "gender": "Male",
+      "gender_dropdown_options": ["Male", "Man"],
+      "race_ethnicity": "Asian (Indian)",
+      "race_dropdown_options": ["Asian", "South Asian", "Asian (Indian)"],
+      "veteran_status": "No",
+      "veteran_dropdown_options": [
+        "I am not a protected veteran",
+        "Not a veteran",
+        "No"
+      ],
+      "disability_status": "No",
+      "disability_dropdown_options": [
+        "No, I do not have a disability",
+        "Do not have a disability",
+        "No"
+      ]
+    },
+    "target_roles_manifest": {
+      "pillar_1_revops": {
+        "title": "Revenue Operations & Commercial Operations",
+        "resume": "resumes/V2_RevOps.pdf",
+        "target_titles": [
+          "Head of Revenue Operations",
+          "Director of Revenue Operations",
+          "Senior Manager RevOps",
+          "RevOps Lead",
+          "Revenue Operations Manager",
+          "Commercial Operations Lead",
+          "GTM Operations Lead",
+          "GTM Operations Director",
+          "Sales Operations Director",
+          "Deal Desk Lead"
+        ]
+      },
+      "pillar_2_customer_success": {
+        "title": "Customer Success & Post-Sales Strategy",
+        "resume": "resumes/V5_Customer_Success.pdf",
+        "target_titles": [
+          "Head of Customer Success",
+          "Director of Customer Success",
+          "VP Customer Success",
+          "Senior Manager Customer Success",
+          "Customer Success Operations Lead",
+          "Customer Lifecycle Lead",
+          "Director Customer Experience",
+          "Client Retention & Expansion Lead"
+        ]
+      },
+      "pillar_3_strategy_operations": {
+        "title": "Strategy & Operations / Chief of Staff / Business Programs",
+        "resumes": {
+          "chief_of_staff": "resumes/V3_Strategy_Ops_ChiefOfStaff.pdf",
+          "gtm_revenue_strategy": "resumes/V1_GTM_Revenue_Strategy.pdf",
+          "business_programs": "resumes/V4_Program_Management.pdf",
+          "operations_excellence": "resumes/V6_Operations_Excellence.pdf"
+        },
+        "target_titles": [
+          "Chief of Staff",
+          "Founder's Office Lead",
+          "CEO's Office Partner",
+          "CRO's Office Lead",
+          "Director Strategy & Operations",
+          "Head of BizOps",
+          "Senior Manager StratOps",
+          "Revenue Strategy Lead",
+          "Director Strategic Programs",
+          "Business Program Manager",
+          "Business Transformation Lead"
+        ]
+      }
+    },
+    "strictly_excluded_titles": [
+      "Technical Program Manager",
+      "TPM",
+      "Engineering Program Manager",
+      "Software Program Manager",
+      "Software Engineer",
+      "Backend Engineer",
+      "Frontend Engineer",
+      "DevOps",
+      "SRE",
+      "Data Engineer",
+      "QA Engineer",
+      "SDET",
+      "Account Executive",
+      "Sales Development Representative",
+      "SDR",
+      "BDR"
+    ]
+  }
+}

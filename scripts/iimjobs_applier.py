@@ -17,6 +17,7 @@ import sys
 import time
 import re
 import argparse
+import sqlite3
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Set
 from playwright.sync_api import sync_playwright, Page
@@ -28,6 +29,7 @@ from scripts.resume_selector import ResumeSelector
 from scripts.sheet_updater import SheetUpdater
 
 SESSION_FILE = BASE_DIR / "sessions" / "iimjobs_state.json"
+DB_PATH = BASE_DIR / "data" / "jobs.db"
 LOGS_DIR = BASE_DIR / "logs"
 LOGS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -43,7 +45,8 @@ IIMJOBS_SEARCH_TARGETS = [
     {"query": "Program Manager", "location": "Hyderabad"},
     {"query": "Technical Program Manager", "location": "Hyderabad"},
     {"query": "Director Program Management", "location": "Hyderabad"},
-    {"query": "Operations Head", "location": "Hyderabad"},
+    {"query": "GTM Strategy", "location": "Hyderabad"},
+    {"query": "Revenue Strategy", "location": "Hyderabad"},
 
     # Tier 3: Bangalore (Primary Tech Ecosystem)
     {"query": "Strategy Operations", "location": "Bangalore"},
@@ -100,28 +103,33 @@ class IIMJobsApplier:
         """Handles Step 2 questionnaire (Submit a Form / screening questions)."""
         print("   [Questionnaire] Filling mandatory screening questions...")
         try:
-            # 1. Radio Buttons: select 'Yes' or positive responses for each question
-            radio_groups = page.locator('.MuiRadio-root, input[type="radio"], label:has-text("Yes")')
-            yes_labels = page.locator('label:has-text("Yes"), span:has-text("Yes"), input[value="Yes"] + label')
-            
-            if yes_labels.count() > 0:
-                for y_i in range(yes_labels.count()):
+            # 1. Radio Buttons: check question context before selecting Yes/No
+            # Identify question containers
+            containers = page.locator('div.question-container, div.form-group, div.MuiFormGroup-root, div[class*="question"]')
+            if containers.count() > 0:
+                for c_i in range(containers.count()):
                     try:
-                        lbl = yes_labels.nth(y_i)
-                        if lbl.is_visible():
-                            lbl.click(force=True)
-                            page.wait_for_timeout(200)
+                        c_el = containers.nth(c_i)
+                        c_text = (c_el.inner_text() or "").lower()
+                        is_negative = any(k in c_text for k in ["previously worked", "former employee", "currently work here", "worked at", "employed here", "family", "relative", "conflict"])
+                        target_val = "No" if is_negative else "Yes"
+                        btn = c_el.locator(f'label:has-text("{target_val}"), span:has-text("{target_val}"), input[value="{target_val}"] + label').first
+                        if btn.count() > 0 and btn.is_visible():
+                            btn.click(force=True)
+                            page.wait_for_timeout(150)
                     except Exception:
                         pass
             else:
-                # If specific 'Yes' labels aren't found, check generic radio buttons
-                radios = page.locator('input[type="radio"]')
-                for r_i in range(0, radios.count(), 2):  # Pick first option of each pair
-                    try:
-                        radios.nth(r_i).click(force=True)
-                        page.wait_for_timeout(200)
-                    except Exception:
-                        pass
+                yes_labels = page.locator('label:has-text("Yes"), span:has-text("Yes"), input[value="Yes"] + label')
+                if yes_labels.count() > 0:
+                    for y_i in range(yes_labels.count()):
+                        try:
+                            lbl = yes_labels.nth(y_i)
+                            if lbl.is_visible():
+                                lbl.click(force=True)
+                                page.wait_for_timeout(150)
+                        except Exception:
+                            pass
 
             # 2. Notice period selection
             notice_options = [
@@ -149,9 +157,7 @@ class IIMJobsApplier:
                     inp = inputs.nth(inp_i)
                     if not inp.is_visible():
                         continue
-                    curr_val = inp.input_value()
-                    if curr_val:
-                        continue  # Already filled
+                    curr_val = inp.input_value().strip()
 
                     placeholder = (inp.get_attribute("placeholder") or "").lower()
                     name = (inp.get_attribute("name") or "").lower()
@@ -163,13 +169,18 @@ class IIMJobsApplier:
 
                     combined = f"{placeholder} {name} {label_text}"
                     if "current ctc" in combined or "current salary" in combined:
-                        inp.fill("35")
+                        if not curr_val or not curr_val.isdigit():
+                            inp.fill("40")
                     elif "expected ctc" in combined or "expected salary" in combined:
-                        inp.fill("50")
-                    elif "experience" in combined:
-                        inp.fill("9")
-                    elif "notice" in combined:
-                        inp.fill("30")
+                        if not curr_val or not curr_val.isdigit():
+                            inp.fill("55")
+                    elif any(k in combined for k in ["experience", "years", "total exp"]):
+                        if not curr_val or not curr_val.isdigit():
+                            inp.fill("9")
+                    elif any(k in combined for k in ["notice", "days", "availability"]):
+                        target_notice = "1" if any(m in combined for m in ["month", "months"]) else "30"
+                        if not curr_val or not curr_val.isdigit() or curr_val != target_notice:
+                            inp.fill(target_notice)
                     page.wait_for_timeout(150)
                 except Exception:
                     pass
@@ -346,6 +357,19 @@ class IIMJobsApplier:
                         job_id_match = re.search(r'-(\d+)$', j_url)
                         job_id = job_id_match.group(1) if job_id_match else str(int(time.time()))
 
+                        # Check company submission limit (Strictly <= 2 per company)
+                        if company and company != "Company":
+                            try:
+                                with sqlite3.connect(DB_PATH, timeout=30.0) as conn:
+                                    c_cursor = conn.cursor()
+                                    c_cursor.execute("SELECT COUNT(*) FROM jobs WHERE LOWER(company) = ? AND status = 'Submitted'", (company.lower(),))
+                                    c_count = c_cursor.fetchone()[0]
+                                    if c_count >= 2:
+                                        print(f"   -> Skipped (Company '{company}' already reached max 2 submitted jobs)")
+                                        continue
+                            except Exception:
+                                pass
+
                         # LAYER 1: Pre-Submission Portal Check (Already applied?)
                         applied_badge = page.locator('button, a, span').filter(has_text=re.compile(r'^(Applied|Already Applied)$', re.I))
                         if applied_badge.count() > 0 and applied_badge.first.is_visible():
@@ -378,6 +402,15 @@ class IIMJobsApplier:
 
                         jd_text = page.locator('body').inner_text()
 
+                        # Check Salary Floor (Strictly >= ₹45 LPA, skip if stated max < 45 LPA)
+                        salary_match = re.search(r'₹\s*(\d+)\s*(?:-\s*(\d+))?\s*(?:LPA|Lacs|Lakh)', jd_text[:2000], re.I)
+                        if salary_match:
+                            min_sal = int(salary_match.group(1))
+                            max_sal = int(salary_match.group(2)) if salary_match.group(2) else min_sal
+                            if max_sal < 45:
+                                print(f"   -> Skipped (Stated salary ₹{min_sal}-{max_sal} LPA < candidate floor ₹45 LPA)")
+                                continue
+
                         # LAYER 2: Role Fit Scoring
                         selected_resume, fit_score, rationale = self.selector.select_best_resume(
                             title=title,
@@ -398,7 +431,14 @@ class IIMJobsApplier:
 
                         print(f"   -> Clicking Apply button for {title}...")
                         apply_btn.click(force=True)
-                        page.wait_for_timeout(3000)
+                        page.wait_for_timeout(2500)
+
+                        # Handle "Apply Anyway" or criteria mismatch popups
+                        anyway_btn = page.locator('button:has-text("Apply Anyway"), button:has-text("Proceed"), button:has-text("Yes, Apply"), button:has-text("Confirm")')
+                        if anyway_btn.count() > 0 and anyway_btn.first.is_visible():
+                            print(f"   -> Clicking '{anyway_btn.first.inner_text().strip()}' modal button...")
+                            anyway_btn.first.click(force=True)
+                            page.wait_for_timeout(2000)
 
                         # LAYER 4: Questionnaire Handling
                         if "/screening" in page.url or "Submit a Form" in page.content() or page.locator('input[type="radio"]').count() > 0:
