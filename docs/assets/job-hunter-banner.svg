@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="300" viewBox="0 0 1200 300" role="img" aria-labelledby="title desc">
+  <title id="title">Job Hunter</title>
+  <desc id="desc">One verified profile. Better job matches. Applications you can verify.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b1224"/>
+      <stop offset="1" stop-color="#152845"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#62e6b7"/>
+      <stop offset="1" stop-color="#63b8ff"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="300" rx="24" fill="url(#background)"/>
+  <circle cx="1090" cy="30" r="185" fill="#274364" opacity=".34"/>
+  <circle cx="918" cy="295" r="165" fill="#0f8579" opacity=".16"/>
+  <rect x="48" y="39" width="155" height="31" rx="15.5" fill="#1e3d49"/>
+  <circle cx="68" cy="54.5" r="5" fill="#62e6b7"/>
+  <text x="83" y="60" fill="#c7f7e7" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="700" letter-spacing="1.2">OPEN SOURCE</text>
+  <text x="48" y="153" fill="#ffffff" font-family="Arial, Helvetica, sans-serif" font-size="61" font-weight="800">Job Hunter</text>
+  <rect x="48" y="172" width="82" height="5" rx="2.5" fill="url(#accent)"/>
+  <text x="48" y="219" fill="#ccdaea" font-family="Arial, Helvetica, sans-serif" font-size="24">One verified profile. Better job matches.</text>
+  <text x="48" y="251" fill="#ccdaea" font-family="Arial, Helvetica, sans-serif" font-size="24">Applications you can verify.</text>
+  <rect x="827" y="80" width="304" height="151" rx="18" fill="#203a55" stroke="#45637e" stroke-width="2"/>
+  <rect x="851" y="104" width="190" height="13" rx="6.5" fill="#54718b"/>
+  <rect x="851" y="133" width="242" height="10" rx="5" fill="#415e78"/>
+  <rect x="851" y="156" width="212" height="10" rx="5" fill="#415e78"/>
+  <circle cx="874" cy="198" r="14" fill="#62e6b7"/>
+  <path d="m867 198 5 5 9-10" fill="none" stroke="#0b2830" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="898" y="204" fill="#d9f9ec" font-family="Arial, Helvetica, sans-serif" font-size="17" font-weight="700">Verified outcome</text>
+</svg>

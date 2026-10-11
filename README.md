@@ -1,248 +1,95 @@
-# ⚡ Nexus: Autonomous RevOps, GTM Strategy & Career Opportunity Intelligence Engine
+# Job Hunter
 
-<div align="center">
+![Job Hunter: one verified profile, better job matches, applications you can verify](docs/assets/job-hunter-banner.svg)
 
-[![GitHub stars](https://img.shields.io/github/stars/himanshugargnmims-cyber/job-hunter?style=for-the-badge&logo=github&color=gold)](https://github.com/himanshugargnmims-cyber/job-hunter/stargazers)
-[![GitHub forks](https://img.shields.io/github/forks/himanshugargnmims-cyber/job-hunter?style=for-the-badge&logo=github&color=blue)](https://github.com/himanshugargnmims-cyber/job-hunter/network/members)
-[![CI Build Status](https://img.shields.io/github/actions/workflow/status/himanshugargnmims-cyber/job-hunter/ci.yml?branch=main&style=for-the-badge&logo=github-actions)](https://github.com/himanshugargnmims-cyber/job-hunter/actions)
-[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
-[![Playwright](https://img.shields.io/badge/Playwright-Automated-45ba4b?style=for-the-badge&logo=playwright&logoColor=white)](https://playwright.dev/)
-[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://docker.com)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
+**A work-in-progress, open-source job search assistant.** Job Hunter explores job discovery, resume matching, application form handling, and proof-backed tracking. The goal is a plug-and-play workflow: enter your information and preferences once, connect the services you choose, and let the assistant handle the repeatable work accurately.
 
-**An Enterprise-Grade Revenue Operations (RevOps) Engine & Autonomous Opportunity Acquisition Platform.**  
-*Applying the algorithmic precision, forecasting rigor, and pipeline velocity models of high-growth B2B SaaS to strategic career capital and enterprise job intelligence.*
+[![Python CI](https://github.com/himanshugargnmims-cyber/job-hunter/actions/workflows/python-app.yml/badge.svg)](https://github.com/himanshugargnmims-cyber/job-hunter/actions/workflows/python-app.yml)
+[![MIT license](https://img.shields.io/badge/license-MIT-2ea44f)](LICENSE)
+![Status: prototype](https://img.shields.io/badge/status-prototype-orange)
 
-[Explore Architecture](#-system-architecture) • [Quick Start](#-quick-start) • [RevOps Suite](#-revops--gtm-strategy-suite) • [Awesome-RevOps Guide](docs/AWESOME_REVOPS.md) • [100K Star Playbook](docs/STAR_ROADMAP_100K.md) • [Recruiter Walkthrough](#-for-hiring-managers--recruiters)
+> [!IMPORTANT]
+> **This is a prototype, not a hands-off application service.** Several job-search paths are not connected end to end. Form answers, account flows, and submission states still need validation against live sites. Review every application before treating it as sent.
 
-</div>
+## The product we are building
 
----
+A user should be able to provide:
 
-## 🌟 Awesome-RevOps Master Reference Included!
-Looking for industry benchmarks, SaaS metrics formulas, and deal desk governance frameworks? Check out our curated **[`docs/AWESOME_REVOPS.md`](docs/AWESOME_REVOPS.md)** — the definitive handbook for revenue operators, sales leaders, and GTM engineers.
+- A verified career profile and approved resume variants.
+- Preferred roles, industries, locations, remote eligibility, salary expectations, and exclusions.
+- Optional access to job portals and email used for applications.
 
----
+Job Hunter should then discover relevant openings, read the full job description, pick the appropriate resume, answer each form field in the format requested, handle supported account and email verification flows, and keep an evidence-backed record of what happened. It should stop and ask when a fact is missing, a portal blocks the flow, or the outcome cannot be confirmed.
 
-## 🎯 The Core Thesis: Career-as-a-Revenue-Engine
+The intended sources include company career pages and ATS boards, plus LinkedIn, IIMJobs, Naukri, and other portals where access and automation are supported. Coverage varies by source and is **not exhaustive today**.
 
-Most job searches are handled like chaotic outbound spam: high effort, low signal, and zero telemetry.
+## What is available today
 
-**Nexus** reframes high-stakes career advancement through the lens of an enterprise **Chief Revenue Officer (CRO)**:
-- **The Candidate** is an **Enterprise Solution / High-Value Asset**.
-- **Target Companies & JDs** are **Target Accounts & Ideal Customer Profiles (ICPs)**.
-- **Resume Archetypes** are **Tailored Value Propositions** mapped to distinct buyer needs.
-- **The Application Funnel** is treated with the exact mathematical discipline of **B2B Pipeline Velocity** ($V = \frac{N \times W \times S}{L}$).
-- **Compensation & Career Goals** are guided by **AOP Quota Attainment & MAPE Forecasting Rigor**.
+| Area | Current state |
+| --- | --- |
+| Job discovery | Scripts for several direct ATS sources and portal searches exist. Source coverage and the main setup-to-search path are incomplete. |
+| Resume matching | Heuristic matching can compare job text with PDF, TXT, or Markdown resume content. It does not yet guarantee correct routing for every role. |
+| Applications | Experimental browser adapters exist for LinkedIn, IIMJobs, Naukri, and direct ATS forms. They need stronger field interpretation, eligibility checks, and live outcome verification. |
+| Email verification | An IMAP-based helper exists for some OTP flows. There is no universal Gmail connection or account-creation workflow. |
+| Tracking | Local SQLite and CSV-related code exists, with optional spreadsheet integration. A displayed status is not necessarily proof that a portal accepted an application. |
+| RevOps toolkit | Separate forecasting, compensation, funnel, and deal desk examples are included in `revops_kit/`. They are demos, not required for the job-search workflow. |
 
----
+See the [roadmap and release checks](docs/ROADMAP.md) for the concrete work between this prototype and a dependable plug-and-play experience.
 
-## 🏛️ System Architecture
+## Target workflow
 
 ```mermaid
-flowchart TD
-    subgraph Sourcing ["1. Sourcing & Account Discovery"]
-        A1["Greenhouse Live Board API"]
-        A2["Lever Structured Postings API"]
-        A3["Ashby High-Velocity API"]
-    end
-
-    subgraph Intelligence ["2. Opportunity Intelligence & Fit Scoring"]
-        B1["JD Requirement Tokenizer"]
-        B2["6-Charter Resume Routing Engine"]
-        B3["Salary Floor Filter (INR/USD/EUR)"]
-        B4["ICP & Account Propensity Scorer"]
-    end
-
-    subgraph Execution ["3. Autonomous Execution & Form Synthesis"]
-        C1["Playwright Stealth Browser Engine"]
-        C2["Gemini AI Grounded Q&A Assistant"]
-        C3["Greenhouse OTP Auto-Solver (IMAP)"]
-    end
-
-    subgraph Telemetry ["4. RevOps Persistence & Analytics"]
-        D1[("SQLite Database Cache")]
-        D2[("CSV / Excel Executive Dashboard")]
-        D3["Pipeline Velocity & MAPE Engine"]
-        D4["Web UI & Telemetry Dashboard"]
-    end
-
-    Sourcing --> Intelligence
-    Intelligence --> Execution
-    Execution --> Telemetry
-
-    style Sourcing fill:#0f172a,stroke:#3b82f6,color:#fff
-    style Intelligence fill:#0f172a,stroke:#10b981,color:#fff
-    style Execution fill:#0f172a,stroke:#f59e0b,color:#fff
-    style Telemetry fill:#0f172a,stroke:#a855f7,color:#fff
+flowchart LR
+    A["Verified profile, preferences, approved resumes"] --> B["Discover and deduplicate jobs"]
+    B --> C["Read full description and eligibility rules"]
+    C --> D["Choose resume and resolve exact form answers"]
+    D --> E["Apply through supported portal"]
+    E --> F["Verify receipt or record uncertain outcome"]
+    F --> G["Update tracker and show exceptions"]
 ```
 
----
+This diagram describes the **target design**. It is not a claim that every step works across every portal in the current code.
 
-## 💼 Why Hiring Managers & Recruiters Love This Project
+### Rules for a dependable application
 
-When evaluating candidates for **Revenue Operations (RevOps)**, **Go-To-Market (GTM) Strategy**, **Chief of Staff**, or **Strategic Operations**, this repository serves as live proof of executive-level execution:
+1. **Use only verified facts.** Total experience, specialist experience, salary, work authorization, and contact details must come from the user's approved profile.
+2. **Respect the field's unit and shape.** “Expected salary in lakhs” may require `55`; an INR field may require `5500000`. A numeric years-of-experience field needs a number, not a paragraph.
+3. **Check eligibility before acting.** Location, remote policy, mandatory skills, duplicate applications, and company-specific application limits matter.
+4. **Treat a result as confirmed only with evidence.** A final portal confirmation, application ID, or authoritative applied state should support a “submitted” label. An uncertain result stays uncertain.
+5. **Make exceptions visible.** Captchas, unsupported forms, missing facts, failed verification, and ambiguous outcomes must be surfaced for review.
 
-| RevOps Core Competency | How Nexus Proves It in Code |
-| :--- | :--- |
-| **Pipeline Forecasting & Variance Reduction** | [`revops_kit/forecasting_engine.py`](revops_kit/forecasting_engine.py) implements weighted probability modeling, AOP pacing, and Mean Absolute Percentage Error (**MAPE**) reduction (<12% error threshold). |
-| **GTM Velocity & Conversion Sensitivity** | [`revops_kit/pipeline_velocity.py`](revops_kit/pipeline_velocity.py) models sales cycle compression, win-rate sensitivity, and compound ARR acceleration. |
-| **Sales Compensation & OTE Plan Modeler** | [`revops_kit/compensation_modeler.py`](revops_kit/compensation_modeler.py) models 4.5x-6x quota:OTE capacity ratios, tiered marginal accelerators (1.5x, 2.0x), and equity (RSU/ISO) vesting liquidity. |
-| **Deal Desk Commercial Governance** | [`revops_kit/deal_desk_copilot.py`](revops_kit/deal_desk_copilot.py) evaluates commercial discount approval tiers (Rep -> VP -> RevOps -> CRO/CFO), margin erosion, and competitor battlecard objections. |
-| **Full-Funnel Cohort & Leaky Bucket Diagnostics** | [`revops_kit/funnel_analyzer.py`](revops_kit/funnel_analyzer.py) benchmarks stage-to-stage yield across 7 lifecycle stages against top-decile SaaS benchmarks with prescriptive RevOps remedies. |
-| **Account Tiering & ICP Scoring** | [`revops_kit/lead_icp_scorer.py`](revops_kit/lead_icp_scorer.py) implements a 4-pillar scoring algorithm (firmographic, technographic, intent, and strategic fit) that directly powers the resume-to-JD matching engine. |
-| **Board-Level Financial Telemetry** | [`revops_kit/executive_kpi_dashboard.py`](revops_kit/executive_kpi_dashboard.py) computes canonical SaaS metrics: **ARR, NRR, GRR, CAC Payback, SaaS Magic Number, and Rule of 40**. |
-| **Complex Systems Automation** | [`scripts/hard_check_applier.py`](scripts/hard_check_applier.py) demonstrates enterprise-grade browser orchestration, automated email OTP parsing via IMAP, and bulletproof DOM state verification. |
-| **AI Grounding & Knowledge Retrieval** | [`scripts/question_answerer.py`](scripts/question_answerer.py) uses **Google Gemini** with zero-hallucination candidate profile grounding to answer open-ended screening questions with quantified impact. |
+## Explore the code
 
----
+The current CI exercises Python 3.10. Start with a virtual environment and these demo commands:
 
-## ⚡ Quick Start (Ready in 2 Minutes)
-
-### 1. Clone & Install
 ```bash
 git clone https://github.com/himanshugargnmims-cyber/job-hunter.git
 cd job-hunter
-
-python3 -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-
+python3.10 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
-playwright install chromium
-```
-
-### 2. Onboard via Web UI (Drag & Drop)
-```bash
-python run.py --ui
-```
-> Open **`http://localhost:8080`** in your browser.  
-> 1. Drag & drop your resume PDF.  
-> 2. The parser auto-extracts contact details, experience, and links.  
-> 3. Tweak target roles, location hubs, salary floors, and target companies.  
-> 4. Hit **Save & Launch Pipeline**!
-
-*(Alternatively, run the guided terminal wizard: `python run.py --setup`)*
-
----
-
-## 📊 RevOps & GTM Strategy Suite
-
-Run the full executive RevOps simulation directly from the CLI:
-
-```bash
+python run.py --help
 python run.py --revops
 ```
 
-```text
-======================================================================
-    EXECUTIVE REVENUE FORECAST & AOP PACING REPORT
-======================================================================
-  Target Operating Quota (AOP) : $4,000,000.00
-  Total Unweighted Pipeline    : $4,000,000.00 (1.0x Coverage)
-  Stage-Weighted Probability   : $3,390,000.00
-  Blended Executive Forecast   : $2,625,000.00 (65.6% Attainment)
-  Historical Forecast Accuracy (MAPE) : 5.41% [Top-Decile Enterprise Rigor]
-----------------------------------------------------------------------
-  REVOPS LEVER OPTIMIZATION IMPACT (Sensitivity Model):
-    1. Win Rate (+3% via Deal Desk)       : +$357,585.94 (+11.5%)
-    2. Cycle Compression (-8 days via CPQ): +$442,725.45 (+14.3%)
-    3. ACV Expansion (+10% via Packaging) : +$309,907.82 (+10.0%)
-    --> COMPOUNDED REVOPS IMPACT          : +$1,246,442.42 (+40.2%)
-======================================================================
-```
+On Windows, activate the environment with `.venv\Scripts\activate`. The RevOps command uses bundled sample data. Browser flows need Playwright's Chromium installation (`playwright install chromium`) and additional setup. **Do not use `--all` or `--apply` as unattended production commands yet.** The current `--stats` path is also not working.
 
-Read the full [RevOps Playbook & Strategy Reference](docs/REVOPS_PLAYBOOK.md) for deep-dives into operating rhythms, deal desk structures, and SaaS metric formulas.
+### Repository map
 
----
+| Path | Purpose |
+| --- | --- |
+| [`run.py`](run.py) | CLI entry point |
+| [`scripts/`](scripts/) | Discovery, matching, form, and application experiments |
+| [`revops_kit/`](revops_kit/) | Standalone RevOps examples |
+| [`tests/`](tests/) | Existing test suite |
+| [`docs/ROADMAP.md`](docs/ROADMAP.md) | Product milestones and acceptance checks |
 
-## 🛠️ CLI Command Reference
+## Privacy and contribution
 
-Nexus provides a unified CLI orchestrator:
+Profiles, resumes, email access, and portal sessions can contain sensitive information. Use fake data in issues, tests, and demos. Keep credentials in local environment configuration and inspect `.gitignore` before adding any files; ignore rules are not a security boundary.
 
-```bash
-# Interactive setup wizard
-python run.py --setup
+Contributions are welcome, especially reproducible fixes for form semantics, source coverage, application proof, and fresh-user setup. Read [CONTRIBUTING.md](CONTRIBUTING.md) and include a safe fixture or clear reproduction when reporting a portal issue. The [launch plan](docs/LAUNCH_PLAN.md) explains where we plan to share the prototype and what needs to work before a broader launch.
 
-# Launch modern Web UI dashboard with live simulators (http://localhost:8080)
-python run.py --ui
+The separate RevOps references remain available in the [playbook](docs/REVOPS_PLAYBOOK.md) and [resource guide](docs/AWESOME_REVOPS.md).
 
-# Run full RevOps forecasting, velocity, comp & deal desk simulation suite
-python run.py --revops
-
-# Run Sales Compensation & OTE Plan Modeler with accelerator tiers
-python run.py --comp
-
-# Run Commercial Deal Desk Governance & Battlecard simulator
-python run.py --dealdesk
-
-# Run Full-Funnel Cohort & Leaky Bucket conversion diagnostics
-python run.py --funnel
-
-# Display Awesome-RevOps definitive playbook and metrics index
-python run.py --awesome
-
-# Ingest live postings matching target filters
-python run.py --scrape
-
-# Evaluate & score resume variants against scraped jobs (0-100%)
-python run.py --match
-
-# Auto-apply with Playwright (review simulation mode)
-python run.py --apply --dry-run
-
-# Run full end-to-end pipeline (Scrape -> Match -> Apply)
-python run.py --all
-
-# View database metrics & tracker summary
-python run.py --stats
-
-# Export multi-tab formatted Excel executive dashboard
-python run.py --export
-```
-
----
-
-## 🐳 Docker Support
-
-Run Nexus in a standalone container with zero local environment dependencies:
-
-```bash
-docker compose up -d
-```
-Access the Web UI immediately at `http://localhost:8080`.
-
----
-
-## 🔒 Security, Privacy & Sanitization
-
-This repository is strictly privacy-hardened:
-- **No Personal Data Tracked**: All real resumes (`resumes/*.pdf`), session files (`sessions/*`), application databases (`data/*.db`), Excel workbooks (`*.xlsx`), and screenshot logs (`logs/*`) are **strictly gitignored**.
-- **Zero Secrets**: Credentials and API keys are loaded strictly from `.env` (gitignored).
-- **Template Architecture**: New users start cleanly with `.example` templates generated on the fly.
-
----
-
-## 🌟 Community Roadmap & 100K Stars Vision
-
-We are building the definitive open-source **Career Capital & Revenue Operations Operating System**:
-
-- [x] Multi-ATS live ingestion (Greenhouse, Lever, Ashby)
-- [x] 6-Charter Resume Routing Engine with objective fit scoring
-- [x] Playwright form auto-filling with email OTP resolution
-- [x] Google Gemini grounded AI screening Q&A
-- [x] RevOps Intelligence Suite (Forecasting, Velocity, MAPE, ICP)
-- [x] Zero-dependency Web UI Dashboard & Terminal Wizard
-- [x] GitHub Actions automated daily scouting workflow
-- [ ] **v2.0**: Integration with Salesforce & HubSpot CPQ APIs for live CRM sync
-- [ ] **v2.1**: Automated LinkedIn Recruiter InMail response triage via LLM
-- [ ] **v2.2**: Multi-agent collaborative interview prep simulator
-- [ ] **v2.3**: One-click cloud deploy (Railway, Render, AWS ECS)
-
-### How to Support
-If you find this project valuable, **give it a star ⭐** and share it with founders, RevOps leaders, and operators!
-
----
-
-## 📄 License
-
-Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for details.
+Licensed under [MIT](LICENSE).
